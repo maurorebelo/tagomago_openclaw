@@ -2,10 +2,9 @@
 
 This folder holds **sanitized / example** OpenClaw configuration so changes are tracked in GitHub. The real config lives in `.openclaw/` on each machine and is **not** committed (secrets, tokens, paths).
 
-- **On VPS:** `/data/.openclaw/openclaw.json` (and `.env` for secrets).
-- **Locally:** `.openclaw/` and `.env` stay out of the repo.
+The real config lives **only on the VPS** (`/data/.openclaw/openclaw.json` and `.env`). Do not run OpenClaw locally.
 
-When you change plugins, channels, models, gateway, or tools on one install, update the example here (with placeholders for secrets) so the other install and the repo stay aligned.
+When you change plugins, channels, models, gateway, or tools on the VPS, update the example here (with placeholders for secrets) so the repo stays aligned.
 
 ## Do not commit
 
