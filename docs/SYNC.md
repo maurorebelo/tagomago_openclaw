@@ -1,33 +1,46 @@
-# Sync: GitHub ↔ Mac (repo only) ↔ VPS (OpenClaw)
+# Sync: GitHub ↔ Mac ↔ VPS /data
 
-## Three places
+## Three places, one heart (VPS /data)
 
 | Place | Role |
 |-------|------|
-| **GitHub** (tagomago_openclaw) | Source of truth for code, memory files, config example. No secrets, no skill data. |
-| **Mac** (this workspace) | Repo clone only — edit skills, memory, docs, push to GitHub. **No OpenClaw runs here.** No need for `.openclaw/` or `.env` locally. Can hold skill data (zips, DBs) to sync to VPS if you want. |
-| **VPS** (Hostinger, container) | **Only place OpenClaw runs.** Repo content via `git pull` in `/data`. Real `.openclaw/` and `.env` live here. Skill data (zips, DBs) lives here. |
+| **GitHub** (tagomago_openclaw) | Versioned only: code, memory files, config example, sanitized config. No secrets, no skill data. |
+| **Mac** (this workspace) | Same as GitHub **plus** a local **data/** that mirrors the non-git parts of VPS /data. Edit here, push to GitHub (git) or sync to VPS (rsync). **No OpenClaw runs here.** |
+| **VPS** (Hostinger, container) | **Heart of OpenClaw.** `/data` = full workspace: repo (git) + `.openclaw/`, `.env`, **data/** (zips, DBs, etc.). Runs here. |
 
-## In the repo (GitHub)
+So: **GitHub** = what’s versioned; **VPS /data** = what runs; **Mac** = versioned copy + local mirror of **data/** so you can change things locally and sync to the VPS.
 
-- **Memory files:** AGENTS.md, MEMORY.md, USER.md, HEARTBEAT.md, IDENTITY.md, SOUL.md, BOOTSTRAP.md, memory/
-- **Skills:** code, SKILL.md, agents/, scripts/ (no node_modules, no data)
-- **Config example:** config/openclaw.json.example, config/README.md
-- **Docs and scripts:** docs/, scripts/
+## What lives where
 
-## Not in the repo
+- **In the repo (GitHub):** Memory files, skills, docs, scripts, config example, sanitized config. No **data/**.
+- **Only on VPS (not in GitHub):** `.openclaw/`, `.env`, and the contents of **data/** (zips, DuckDB, Notion/Nostr data, etc.).
+- **Local data/ (Mac):** Mirror of **VPS /data/data/** — not in git, but synced with the VPS so you can edit locally and push to the VPS (or pull from the VPS).
 
-- **Secrets:** .env, .env.*, .openclaw/openclaw.json, .openclaw/credentials/
-- **Skill data:** *.zip, data/, *.duckdb, *.sqlite, Notion exports, Nostr relay dumps
+## Keeping everything aligned
 
-## Keeping things aligned
+1. **Code + memory (GitHub):** Edit on Mac → `git push`. On VPS: `cd /data && git pull`.
+2. **Dashboard config:** After changes in the OpenClaw dashboard, run on the VPS the sanitize script; commit/push `config/openclaw.sanitized.json`. See config/README.md.
+3. **data/ (non-git):**
+   - **Pull from VPS → Mac:** `./scripts/sync-data-from-vps.sh` (fills local **data/** from VPS).
+   - **Push Mac → VPS:** `./scripts/sync-data-to-vps.sh` (sends local **data/** to VPS).
+   - So you can work in **data/** on the Mac and then sync to the VPS without putting that in GitHub.
 
-1. **Code + memory:** Edit on Mac, push to GitHub. On VPS run `git pull` in `/data` to get latest.
-2. **Config:** Edit only on VPS (or edit `config/openclaw.json.example` on Mac and apply changes on VPS). Document structure in the example and commit — no real tokens.
-3. **Skill data:** Only on VPS (or sync Mac → VPS with rsync/scp if you keep copies on Mac). Never in GitHub.
+## VPS paths (for scripts)
 
-## VPS quick sync
+- **On the host:** `VPS_DATA_PATH` = `/docker/openclaw-b60d/data` (default in scripts).
+- **In the container:** `/data` (workspace root); **data/** = `/data/data/`.
+
+Set once if different: `export VPS_DATA_HOST=hostinger-vps` and `export VPS_DATA_PATH=/docker/openclaw-b60d/data`.
+
+## VPS quick sync (code + memory)
 
 ```bash
 ssh hostinger-vps "docker exec openclaw-b60d-openclaw-1 sh -c 'cd /data && git pull origin master'"
+```
+
+## data/ sync (Mac ↔ VPS, not in GitHub)
+
+```bash
+./scripts/sync-data-from-vps.sh   # pull VPS → local data/
+./scripts/sync-data-to-vps.sh     # push local data/ → VPS
 ```

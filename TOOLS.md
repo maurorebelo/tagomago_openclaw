@@ -8,8 +8,13 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 - **SSH host:** `hostinger-vps` (or set `NOSTR_REBROADCAST_SSH`)
 - **Container:** `openclaw-b60d-openclaw-1` (or set `NOSTR_REBROADCAST_CONTAINER`)
+- **VPS workspace (host path):** `/docker/openclaw-b60d/data` — use for rsync scripts (`VPS_DATA_PATH`); in container this is `/data`.
 - **tweets.js on VPS:** `/docker/openclaw-b60d/data/data/tweets.js` (after unzipping archive under `/docker/openclaw-b60d/data/`)
 - **Bridge:** wss://bridge.tagomago.me — **Target:** wss://nostr.tagomago.me
+
+## VPS tools (not in default Hostinger install)
+
+- **gog** (skill no dashboard): skill built-in do OpenClaw (vem no pacote). No dashboard, Skills → marcar **gog**. Depende do binário `gog`, que no VPS está instalado via Linuxbrew (fórmula gogcli) em `/data/linuxbrew`; config em `/data/.config/gogcli`. Ou seja: a *skill* é a "gog" no OpenClaw; o *binário* é gogcli no /data.
 
 ## What Goes Here
 

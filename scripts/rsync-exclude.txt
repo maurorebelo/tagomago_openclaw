@@ -1,0 +1,18 @@
+# Rsync exclude list for data/ sync with VPS /data
+# Used by scripts/sync-data-from-vps.sh and scripts/sync-data-to-vps.sh
+# So we don't pull/push things that are huge or only-on-VPS
+
+# Git
+.git/
+.gitignore
+
+# OpenClaw runtime (lives only on VPS; don't overwrite from local)
+.openclaw/
+
+# Env and secrets (never sync)
+.env
+.env.*
+
+# Optional: exclude very large files if you only want structure or small data
+# *.zip
+# *.duckdb
