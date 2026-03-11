@@ -1,0 +1,36 @@
+{
+  "plugins": {
+    "allow": ["whatsapp", "discord", "telegram", "slack", "nostr", "googlechat"],
+    "entries": {
+      "telegram": { "enabled": true },
+      "discord": { "enabled": true },
+      "nostr": { "enabled": true }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "streaming": "partial",
+      "botToken": "<TELEGRAM_BOT_TOKEN>",
+      "enabled": true
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/data",
+      "compaction": { "mode": "safeguard" }
+    }
+  },
+  "tools": {
+    "exec": {
+      "host": "gateway",
+      "security": "full",
+      "ask": "off"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": { "mode": "token", "token": "<GATEWAY_TOKEN>" }
+  }
+}

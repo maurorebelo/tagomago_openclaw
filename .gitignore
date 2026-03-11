@@ -4,21 +4,29 @@
 # IDE / editor
 .cursor/
 
-# OpenClaw local workspace state (VPS has its own)
+# OpenClaw runtime (per-install; use config/ for versioned example)
 .openclaw/
 
-# Large exports / archives (optional: remove if you want them in repo)
+# Secrets — never commit
+.env
+.env.*
+*.pem
+
+# Large exports / skill data — sync local↔VPS only, not GitHub
 *.zip
+data/
+
+# Databases and exports (skill data)
+*.duckdb
+*.sqlite
+*.db
+**/notion_export*/
+**/relay_dumps/
 
 # Python
 .venv/
 __pycache__/
 *.pyc
 
-# Node (skills with node_modules)
+# Node (skills)
 node_modules/
-
-# Secrets / env (don’t commit)
-.env
-.env.local
-*.pem
