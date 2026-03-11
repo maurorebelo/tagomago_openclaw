@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+
+# IDE / editor
+.cursor/
+
+# OpenClaw local workspace state (VPS has its own)
+.openclaw/
+
+# Large exports / archives (optional: remove if you want them in repo)
+*.zip
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node (skills with node_modules)
+node_modules/
+
+# Secrets / env (don’t commit)
+.env
+.env.local
+*.pem

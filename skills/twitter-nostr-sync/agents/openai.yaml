@@ -1,0 +1,7 @@
+interface:
+  display_name: "Twitter → Nostr sync"
+  short_description: "Sync Twitter archive to Nostr (bridge + NIP-96)."
+  default_prompt: "Use $twitter-nostr-sync to sync my tweets to Nostr or run the import/republish."
+
+policy:
+  allow_implicit_invocation: true

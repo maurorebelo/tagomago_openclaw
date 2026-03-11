@@ -1,0 +1,12 @@
+{
+  "name": "nostr2notion",
+  "type": "module",
+  "private": true,
+  "description": "Bridge Nostr events to Notion database",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "nostr-tools": "^2.4.0",
+    "ws": "^8.18.0",
+    "@notionhq/client": "^2.2.15"
+  }
+}

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Health Analytics"
+  short_description: "Ingest Apple Health & Weltory ZIPs into DuckDB; sync Notion workouts; answer health questions from data."
+  default_prompt: "Use health-analytics to import health exports or answer questions from the local health database."
+
+policy:
+  allow_implicit_invocation: true

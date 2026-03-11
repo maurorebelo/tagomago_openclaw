@@ -1,0 +1,86 @@
+Apple Health stores sleep phases as multiple HKCategoryTypeIdentifierSleepAnalysis interval records, not as one nightly session object.
+Each record has:
+- type
+- value
+- startDate
+- endDate
+
+Deep sleep is stored as:
+HKCategoryValueSleepAnalysisAsleepDeep
+
+To compute deep sleep time:
+1. Filter records where type == HKCategoryTypeIdentifierSleepAnalysis
+2. Filter those where value == HKCategoryValueSleepAnalysisAsleepDeep
+3. Compute duration for each as endDate - startDate
+4. Sum all durations
+
+Do not guess deep sleep from total sleep.
+If only HKCategoryValueSleepAnalysisAsleepUnspecified exists, then stage-level deep sleep is unavailable in the export.
+
+Find Apple Health records with type=HKCategoryTypeIdentifierSleepAnalysis and value=HKCategoryValueSleepAnalysisAsleepDeep, then sum endDate-startDate.
+
+{
+  "topic": "How Apple Health stores sleep phase data",
+  "source_system": "Apple Health / HealthKit",
+  "storage_model": {
+    "type_identifier": "HKCategoryTypeIdentifierSleepAnalysis",
+    "record_type": "category sample",
+    "description": "Apple stores sleep as multiple interval records. Each record has a start time, end time, and a sleep stage value. It is not stored as one nightly session object with nested phases."
+  },
+  "record_fields": [
+    "type",
+    "value",
+    "startDate",
+    "endDate"
+  ],
+  "sleep_stage_values": {
+    "HKCategoryValueSleepAnalysisInBed": "User is in bed",
+    "HKCategoryValueSleepAnalysisAwake": "User is awake",
+    "HKCategoryValueSleepAnalysisAsleepCore": "Core/light sleep",
+    "HKCategoryValueSleepAnalysisAsleepDeep": "Deep sleep",
+    "HKCategoryValueSleepAnalysisAsleepREM": "REM sleep",
+    "HKCategoryValueSleepAnalysisAsleepUnspecified": "Asleep, but stage unspecified"
+  },
+  "important_note": "Apple Health does not store sleep as a single object like {session: {..., deep: 70m, rem: 90m}}. Apps must reconstruct the nightly timeline from many interval records.",
+  "how_to_find_deep_sleep": {
+    "filter_type": "HKCategoryTypeIdentifierSleepAnalysis",
+    "filter_value": "HKCategoryValueSleepAnalysisAsleepDeep",
+    "duration_formula": "endDate - startDate",
+    "aggregation": "sum all durations of records where value == HKCategoryValueSleepAnalysisAsleepDeep"
+  },
+  "parsing_algorithm": [
+    "Load all records",
+    "Keep only records where type == HKCategoryTypeIdentifierSleepAnalysis",
+    "For deep sleep, keep only records where value == HKCategoryValueSleepAnalysisAsleepDeep",
+    "For each matching record, compute duration = endDate - startDate",
+    "Sum durations to get total deep sleep time"
+  ],
+  "why_ui_can_show_phases": "Apps like Welltory reconstruct the sleep phase chart by sorting and grouping Apple Health interval records into a nightly timeline.",
+  "why_export_may_look_confusing": [
+    "The export may contain many separate records instead of one session",
+    "Some devices only write AsleepUnspecified instead of detailed stages",
+    "Some export viewers flatten or hide stage values",
+    "InBed may overlap with stage records and should not be treated as a sleep phase"
+  ],
+  "minimal_example": [
+    {
+      "type": "HKCategoryTypeIdentifierSleepAnalysis",
+      "value": "HKCategoryValueSleepAnalysisAsleepCore",
+      "startDate": "2026-03-08 23:14:00 +0000",
+      "endDate": "2026-03-08 23:29:00 +0000"
+    },
+    {
+      "type": "HKCategoryTypeIdentifierSleepAnalysis",
+      "value": "HKCategoryValueSleepAnalysisAsleepDeep",
+      "startDate": "2026-03-08 23:29:00 +0000",
+      "endDate": "2026-03-08 23:52:00 +0000"
+    },
+    {
+      "type": "HKCategoryTypeIdentifierSleepAnalysis",
+      "value": "HKCategoryValueSleepAnalysisAsleepREM",
+      "startDate": "2026-03-08 23:52:00 +0000",
+      "endDate": "2026-03-09 00:05:00 +0000"
+    }
+  ],
+  "agent_output_rule": "If no records exist with value == HKCategoryValueSleepAnalysisAsleepDeep, report that deep sleep is not available in the export rather than guessing."
+}
