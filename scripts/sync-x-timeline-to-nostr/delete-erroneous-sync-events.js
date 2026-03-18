@@ -84,7 +84,7 @@ async function fetchOurKind1(pool, pubkey, relays) {
       } catch (_) {}
       resolve(evs);
     };
-    const sub = pool.subscribe(relays, [{ kinds: [1], authors: [pubkey] }], {
+    const sub = pool.subscribe(relays, { kinds: [1], authors: [pubkey] }, {
       onevent: (ev) => events.push(ev),
       oneose: () => finish(events),
       onclose: (reason) => {
@@ -146,7 +146,11 @@ async function main() {
 
   if (toDelete.length === 0) {
     log('No events to delete.');
-    pool.close();
+    try {
+      pool.close();
+    } catch (e) {
+      log('Pool close: ' + (e && e.message));
+    }
     return;
   }
 
@@ -174,7 +178,11 @@ async function main() {
     log('Published kind-5 deletion for ' + chunk.length + ' events.');
   }
 
-  pool.close();
+  try {
+    pool.close();
+  } catch (e) {
+    log('Pool close: ' + (e && e.message));
+  }
   log('Done. Relays and NIP-09 clients will hide those events.');
 }
 
