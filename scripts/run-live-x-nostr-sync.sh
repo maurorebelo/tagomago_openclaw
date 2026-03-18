@@ -11,6 +11,9 @@
 #
 set -e
 
+# Use xurl read-only wrapper (audit log + block post) when available
+export PATH="/data/bin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+
 SYNC_DIR="${SYNC_X_NOSTR_DIR:-/data/scripts/sync-x-timeline-to-nostr}"
 BRIDGE_RELAY="${NOSTR_BRIDGE_RELAY:-wss://bridge.tagomago.me}"
 TARGET_RELAY="${NOSTR_TARGET_RELAY:-wss://nostr.tagomago.me}"
