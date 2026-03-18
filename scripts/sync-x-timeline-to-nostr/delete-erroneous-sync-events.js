@@ -75,16 +75,23 @@ function tweetIdFromRTag(tag) {
 async function fetchOurKind1(pool, pubkey, relays) {
   return new Promise((resolve, reject) => {
     const events = [];
-    const sub = pool.sub(relays, [{ kinds: [1], authors: [pubkey] }], { onevent: (ev) => events.push(ev) });
-    sub.on('eose', () => {
-      sub.unsub();
-      resolve(events);
+    let done = false;
+    const finish = (evs) => {
+      if (done) return;
+      done = true;
+      try {
+        sub.close();
+      } catch (_) {}
+      resolve(evs);
+    };
+    const sub = pool.subscribe(relays, [{ kinds: [1], authors: [pubkey] }], {
+      onevent: (ev) => events.push(ev),
+      oneose: () => finish(events),
+      onclose: (reason) => {
+        if (!done) finish(events.length ? events : []);
+      },
     });
-    sub.on('error', reject);
-    setTimeout(() => {
-      sub.unsub();
-      resolve(events);
-    }, 30000);
+    setTimeout(() => finish(events), 30000);
   });
 }
 
