@@ -77,7 +77,7 @@ O **conteúdo completo** no formato que o xurl espera (ver exemplo acima). Se ge
 - **Workspace root:** `/data` (container) = `/docker/openclaw-b60d/data` (host). Config: `agents.defaults.workspace: "/data"` em `/data/.openclaw/openclaw.json`.
 - **Skills:** em `/data/skills/`. No host, colocar skills em `/docker/openclaw-b60d/data/skills/` para aparecerem no Dashboard.
 - Gateway e agente devem usar o mesmo path; se o Gateway corre no container, `cwd` = `/data`. Reiniciar o Gateway após mudar config para rescannar skills.
-- **Permissões do workspace (evitar EACCES de forma definitiva):** (1) No `docker-compose.yml` do projeto no VPS, o serviço openclaw deve ter `user: "1000:1000"` para todo o processo correr como UID 1000 e criar ficheiros com esse dono. (2) No host, a pasta do workspace deve pertencer ao mesmo UID: `sudo chown -R 1000:1000 /docker/openclaw-b60d/data`. Assim o agente consegue escrever em USER.md, MEMORY.md e `memory/`. Se no futuro fizeres operações como root (ex.: `sudo cp` ou git pull como root) e os ficheiros ficarem root, corrigir de novo com o mesmo `chown -R 1000:1000`.
+- **Permissões do workspace (evitar EACCES):** O agente pode correr como utilizador não-root dentro do container; se os ficheiros em `/data` no host forem de root, dá EACCES ao escrever. No host: `sudo chown -R ubuntu:ubuntu /docker/openclaw-b60d/data` (ou 1000:1000). Não alterar `user:` no docker-compose — forçar UID 1000 no compose pode impedir o OpenClaw de arrancar. Se após git pull ou operações com sudo os ficheiros ficarem root, repetir o chown.
 
 ## Reference setup (alignment baseline)
 
