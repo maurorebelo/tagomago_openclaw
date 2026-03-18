@@ -68,8 +68,14 @@ Sem `oauth2_tokens` (access_token + refresh_token), o xurl só usa bearer e time
 **O que colar/editar no YAML**  
 O **conteúdo completo** no formato que o xurl espera (ver exemplo acima). Se geraste no Mac com `xurl auth oauth2`, podes usar o teu `~/.xurl` local: copiar para `~/Desktop/xurl.yaml`, abrir no TextEdit, guardar, e depois fazer o scp de volta para a VPS como em 3.
 
+## Nostr — último note
+
+- **"Qual o meu último note Nostr?" / "my last nostr":** Conta do humano = chave em USER.md (npub17kj… / NOSTR_DAMUS_PUBLIC_HEX_KEY). **Não pedir npub nem oferecer opções** — executar. (1) Pubkey: `NOSTR_DAMUS_PUBLIC_HEX_KEY`. (2) Consultar **sempre** os relays onde os teus notes estão: `wss://nostr.tagomago.me` e `wss://bridge.tagomago.me` (o live sync X→Nostr publica aí). Exemplo: `nak req -k 1 -a <pubkey_hex> -l 5 wss://nostr.tagomago.me wss://bridge.tagomago.me` e mostrar o mais recente (maior created_at). Mostrar só o output real; nunca inventar. Ao responder, não acrescentar menu do tipo "Quer que eu baixe/arquive/procure?" — parar após mostrar o note.
+- **nak no ambiente:** Nesta instalação o nak está disponível (imagem com `/usr/local/bin/nak`, volume com `/data/go/bin` ou symlink em `/data/linuxbrew/.linuxbrew/bin`). Se o agente achar que nak está em falta, primeiro verificar com `nak --help` ou `/usr/local/bin/nak --help`; se mesmo assim falhar, executar `go install github.com/fiatjaf/nak@latest` e usar `$GOPATH/bin` (ex. `/data/go/bin`) no PATH — **não pedir autorização ao humano** para instalar; executar e depois prosseguir com o pedido (ex. último note).
+
 ## VPS tools (not in default Hostinger install)
 
+- **nak** (Nostr CLI): para "meu último note", sync bridge→relay, etc. Usa NOSTR_DAMUS_PUBLIC_HEX_KEY (ou pubkey derivada da chave privada) para consultas por autor. **Como descobrir se a imagem é tua:** no VPS, `ls /docker/openclaw-b60d/custom-image/Dockerfile` — se existir, a imagem é build custom (base Hostinger + esse Dockerfile). Para nak ficar permanente: no Dockerfile adicionar instalação de Go e `go install github.com/fiatjaf/nak@latest`, depois copiar o binário para `/usr/local/bin` (fora de `/data`, para não depender do volume). Rebuild: `cd /docker/openclaw-b60d/custom-image && docker build -t openclaw-b60d-openclaw:with-tools .` e recriar o container.
 - **gog** (skill no dashboard): skill built-in do OpenClaw (vem no pacote). No dashboard, Skills → marcar **gog**. Depende do binário `gog`, que no VPS está instalado via Linuxbrew (fórmula gogcli) em `/data/linuxbrew`; config em `/data/.config/gogcli`. Ou seja: a *skill* é a "gog" no OpenClaw; o *binário* é gogcli no /data.
 
 ## Workspace alignment (VPS: Gateway + agent)
