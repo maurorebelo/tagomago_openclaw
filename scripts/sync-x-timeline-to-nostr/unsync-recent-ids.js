@@ -4,6 +4,7 @@
  * so the next sync run will re-publish them to Nostr (e.g. after they were deleted by kind-5 or never synced).
  *
  * Usage: node unsync-recent-ids.js [--days=7]
+ *        node unsync-recent-ids.js --all   (remove ALL your tweet IDs that appear in timeline -n 100, so sync re-publishes them; may duplicate some already on Nostr)
  * Env: HOME=/data, PATH with /data/bin first for xurl wrapper.
  */
 import { execSync } from 'child_process';
@@ -15,6 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SYNCED_IDS_PATH = process.env.TWITTER_NOSTR_SYNCED_IDS || '/data/.twitter-nostr-synced-ids';
 const daysArg = process.argv.find((a) => a.startsWith('--days='));
 const DAYS = daysArg ? parseInt(daysArg.split('=')[1], 10) : 7;
+const ALL_IN_TIMELINE = process.argv.includes('--all');
 
 function log(msg) {
   console.error(`[${new Date().toISOString()}] ${msg}`);
@@ -55,12 +57,16 @@ function main() {
   const myRecentIds = [];
   for (const t of timeline) {
     if (t.author_id !== myXId || !t.id) continue;
-    const ts = t.created_at
-      ? (typeof t.created_at === 'string' ? Math.floor(new Date(t.created_at).getTime() / 1000) : parseInt(t.created_at, 10))
-      : 0;
-    if (ts >= since) myRecentIds.push(String(t.id));
+    if (ALL_IN_TIMELINE) {
+      myRecentIds.push(String(t.id));
+    } else {
+      const ts = t.created_at
+        ? (typeof t.created_at === 'string' ? Math.floor(new Date(t.created_at).getTime() / 1000) : parseInt(t.created_at, 10))
+        : 0;
+      if (ts >= since) myRecentIds.push(String(t.id));
+    }
   }
-  log(`Your tweets in last ${DAYS} days (from timeline): ${myRecentIds.length}`);
+  log(ALL_IN_TIMELINE ? `Your tweets in timeline (-n 100): ${myRecentIds.length}` : `Your tweets in last ${DAYS} days (from timeline): ${myRecentIds.length}`);
 
   const synced = loadSyncedIds();
   const toRemove = myRecentIds.filter((id) => synced.has(id));
