@@ -10,9 +10,11 @@
  *
  * Usage: node delete-erroneous-sync-events.js [--dry-run]
  *        node delete-erroneous-sync-events.js --last-hours=2 [--dry-run]
+ *        node delete-erroneous-sync-events.js --since-event-id=<hex> [--dry-run]
  *
- * --last-hours=N  Delete ALL your kind-1 events from the last N hours (no tweet-ID check).
- * Without --last-hours: use tweet-ID heuristic (only delete events referencing tweets not yours).
+ * --last-hours=N       Delete ALL your kind-1 events from the last N hours.
+ * --since-event-id=ID Delete this event and ALL your kind-1 with created_at >= its created_at.
+ * Without either: use tweet-ID heuristic (only delete events referencing tweets not yours).
  *
  * Env: NOSTR_DAMUS_PUBLIC_HEX_KEY, NOSTR_DAMUS_PRIVATE_HEX_KEY, NOSTR_*_RELAY, HOME=/data for xurl
  */
@@ -37,6 +39,8 @@ const TWITTER_STATUS_PREFIX = 'https://twitter.com/i/status/';
 const dryRun = process.argv.includes('--dry-run');
 const lastHoursArg = process.argv.find((a) => a.startsWith('--last-hours='));
 const lastHours = lastHoursArg ? parseFloat(lastHoursArg.split('=')[1]) : null;
+const sinceEventIdArg = process.argv.find((a) => a.startsWith('--since-event-id='));
+const sinceEventId = sinceEventIdArg ? sinceEventIdArg.split('=')[1].trim() : null;
 
 function log(msg) {
   console.error(`[${new Date().toISOString()}] ${msg}`);
@@ -70,6 +74,23 @@ function tweetIdFromRTag(tag) {
   if (typeof url !== 'string' || !url.startsWith(TWITTER_STATUS_PREFIX)) return null;
   const id = url.slice(TWITTER_STATUS_PREFIX.length).split(/[/?]/)[0];
   return id || null;
+}
+
+async function fetchEventById(pool, relays, id) {
+  return new Promise((resolve) => {
+    const out = [];
+    const sub = pool.subscribe(relays, { ids: [id], kinds: [1] }, {
+      onevent: (ev) => out.push(ev),
+      oneose: () => {
+        sub.close();
+        resolve(out[0] || null);
+      },
+    });
+    setTimeout(() => {
+      sub.close();
+      resolve(out[0] || null);
+    }, 15000);
+  });
 }
 
 async function fetchOurKind1(pool, pubkey, relays) {
@@ -108,7 +129,22 @@ async function main() {
 
   let toDelete = [];
 
-  if (lastHours != null && lastHours > 0) {
+  if (sinceEventId) {
+    log('Mode: delete event ' + sinceEventId.slice(0, 16) + '... and ALL your kind-1 with created_at >= its created_at');
+    const ref = await fetchEventById(pool, ALL_RELAYS, sinceEventId);
+    if (!ref) {
+      log('Event not found: ' + sinceEventId);
+      try { pool.close(); } catch (_) {}
+      process.exit(1);
+    }
+    const sinceTs = ref.created_at;
+    log('Reference event created_at: ' + sinceTs + ' (' + new Date(sinceTs * 1000).toISOString() + ')');
+    const events = await fetchOurKind1(pool, pubkey, ALL_RELAYS);
+    for (const ev of events) {
+      if (ev.created_at >= sinceTs) toDelete.push(ev.id);
+    }
+    log('Found ' + events.length + ' kind-1 events; ' + toDelete.length + ' to delete (this event + all after).');
+  } else if (lastHours != null && lastHours > 0) {
     const since = Math.floor(Date.now() / 1000) - Math.round(lastHours * 3600);
     log('Mode: delete ALL your kind-1 events from the last ' + lastHours + ' hour(s) (since ' + new Date(since * 1000).toISOString() + ')');
     const events = await fetchOurKind1(pool, pubkey, ALL_RELAYS);
@@ -161,8 +197,12 @@ async function main() {
     unique.slice(0, 10).forEach((id) => log('  ' + id));
     if (unique.length > 10) log('  ... and ' + (unique.length - 10) + ' more');
     log('Dry-run: not publishing kind-5. Run without --dry-run to publish.');
-    pool.close();
-    return;
+    try {
+      pool.close();
+    } catch (e) {
+      log('Pool close: ' + (e && e.message));
+    }
+    process.exit(0);
   }
 
   const sk = hexToBytes(privHex);
