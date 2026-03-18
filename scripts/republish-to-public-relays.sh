@@ -12,7 +12,9 @@ SOURCE="${NOSTR_REPUBLISH_SOURCE:-${NOSTR_BRIDGE_RELAY:-wss://bridge.tagomago.me
 PUBLIC_RELAYS_STR="${NOSTR_PUBLIC_RELAYS:-wss://relay.damus.io,wss://nostr.land,wss://nos.lol,wss://relay.nostr.band}"
 B="/tmp/republish-to-public-$$.jsonl"
 
-nak req -k 1 -a "$PUBKEY" -l 50000 "$SOURCE" 2>/dev/null > "$B" || true
+# --paginate: multiple REQs with decreasing 'until' until we have limit or no more (fetches full history)
+echo "Fetching events from $SOURCE (paginated, up to 50000)..."
+nak req -k 1 -a "$PUBKEY" -l 50000 --paginate --paginate-interval 1s "$SOURCE" 2>/dev/null > "$B" || true
 n=$(wc -l < "$B" 2>/dev/null || echo 0)
 echo "Events from $SOURCE: $n. Publishing to public relays..."
 echo "Public relays: $PUBLIC_RELAYS_STR"
