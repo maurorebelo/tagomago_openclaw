@@ -125,9 +125,19 @@ Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tr
 
 ## Safety
 
-- **Live sync:** `xurl timeline` returns the *home* timeline (user + followed accounts). The sync must publish **only** tweets where `author_id === xurl whoami.data.id`. `sync.js` enforces this; do not remove the filter.
-- **Republish to public relays:** Only publish events where `event.pubkey === NOSTR_DAMUS_PUBLIC_HEX_KEY`. `republish-to-public-relays.sh` filters with `jq` before publishing; do not bypass.
-- Events already sent to public relays cannot be unpublished.
+- **Republish to public relays (confirmed):** Only publish events where `event.pubkey === NOSTR_DAMUS_PUBLIC_HEX_KEY`. `republish-to-public-relays.sh` filters with `jq` before publishing; do not bypass. This was the confirmed cause of others’ content reaching public relays.
+- **Live sync (precaution):** Sync must publish **only** tweets where `author_id === xurl whoami.data.id`. `sync.js` enforces this. (X API “Get Timeline” doc describes the *user’s* timeline, not home; we didn’t verify which endpoint `xurl timeline` uses.)
+- Events already sent to public relays cannot be unpublished. To **hide erroneous events** (NIP-09): run `delete-erroneous-sync-events.js` (see below). This only affects events **you** signed (your pubkey); events with other people’s pubkeys that were republished to relays cannot be deleted by you — only the authors could publish a kind-5 for those.
+
+## Deleting erroneous sync events (NIP-09)
+
+If content that wasn’t yours was published **with your Nostr key** (e.g. from live sync), you can ask relays and clients to hide it by publishing a kind-5 deletion:
+
+```bash
+docker exec -e HOME=/data $CONTAINER node /data/scripts/sync-x-timeline-to-nostr/delete-erroneous-sync-events.js --last-hours=2
+```
+
+To delete **all** your kind-1 notes from the last 2 hours (no tweet check): use `--last-hours=2`. Run with `--dry-run` first to see which event IDs would be marked. The script considers “your” tweets = those in `xurl timeline -n 800` with `author_id === whoami`; events whose `r` tag points to a tweet ID not in that set are marked for deletion. If you have more than 800 of your own tweets, review the dry-run output to avoid deleting old valid syncs. **We cannot delete events that have another person’s pubkey** (e.g. sent to public relays by the republish bug); only those authors can request deletion.
 
 ## File layout in the repo
 
@@ -142,6 +152,7 @@ Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tr
 | `scripts/twitter-archive-to-nostr/` | Node project: `import-tweets.js`, `dedupe-keep-nip96.js`, `package.json`. |
 | **Live (xurl, 2x/day)** | |
 | `scripts/sync-x-timeline-to-nostr/sync.js` | Fetches xurl timeline, publishes new tweets to bridge (Node + nostr-tools). |
+| `scripts/sync-x-timeline-to-nostr/delete-erroneous-sync-events.js` | NIP-09: publish kind-5 to hide events that reference tweets not yours (run with --dry-run first). |
 | `scripts/run-live-x-nostr-sync.sh` | One-shot live sync (xurl → bridge → republish to target). |
 | `scripts/run-live-x-nostr-sync-loop.sh` | 12h loop that runs live sync. |
 | **Shared** | |
