@@ -2,13 +2,11 @@
 
 _Learn about the person you're helping. Update this as you go._
 
-- **Name:**
-Mauro
-- **What to call them:**
+- **Name:** Mauro Rebelo
+- **What to call them:** Mauro
 - **Pronouns:** _(optional)_
-- **Timezone:**
-GMT-3
-- **Notes:**
+- **Timezone:** GMT-3
+- **Notes:** Scientist and entrepreneur. Blog: tagomago.me. X/Twitter: account authenticated in this workspace via xurl (the one returned by `xurl whoami` when using `/data/.xurl`). Nostr: account identified by the keys in the Nostr skin/config used in this workspace.
 
 ## Context
 

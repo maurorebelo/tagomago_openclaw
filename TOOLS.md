@@ -20,7 +20,7 @@ O **xurl** não lê credenciais de variáveis de ambiente genéricas: lê apenas
 - **Para o segredo ser usado:** escrever o conteúdo do segredo em `/data/.xurl` (no container) no formato YAML que o xurl espera — por exemplo no arranque do container (script que faz `echo "$XURL_CONFIG" > /data/.xurl` ou montar um ficheiro do host em `/data/.xurl`). Depois disso o agente pode correr `xurl timeline`, `xurl whoami`, etc., sem pedir credenciais; não é preciso fluxo OAuth interativo se o ficheiro já tiver os tokens de user.
 - Se o utilizador disser que “já colocou os tokens no segredo”, o agente deve verificar se `/data/.xurl` existe e tem conteúdo; se não tiver, explicar que o xurl só lê desse ficheiro e que o segredo tem de ser escrito lá (ou montado lá) uma vez.
 - **Script env → .xurl:** `scripts/write-xurl-from-env.js` lê X_API_KEY, X_API_KEY_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET (e opcionalmente X_BEARER_TOKEN) e escreve `/data/.xurl` sem shell. Correr após deploy: `ssh hostinger-vps "docker exec openclaw-b60d-openclaw-1 node /data/scripts/write-xurl-from-env.js"`.
-- **"Busca o meu último tweet" / "my last tweet":** O agente já tem xurl com user OAuth em `/data/.xurl` (conta tagomago_me). Correr `xurl timeline -n 1`. Não pedir @handle nem oferecer opções — executar.
+- **"Busca o meu último tweet" / "my last tweet":** Conta do humano = a que `xurl whoami` devolve com o auth em `/data/.xurl`. **Procedimento obrigatório:** (1) `xurl whoami` → guardar `data.id`; (2) `xurl timeline -n 1`; (3) só afirmar que é o "teu" tweet se `response.data[0].author_id === whoami.data.id`; caso contrário dizer "a timeline devolvida não é da conta autenticada" e mostrar whoami. **Nunca inventar tweets** — só reportar o output real; se o comando falhar, dizer.
 
 **Estrutura YAML que o xurl espera para OAuth2 user** (timeline, whoami): cada app pode ter `bearer_token` (app-only) e/ou `oauth2_tokens` (user). Exemplo com user:
 
@@ -77,6 +77,7 @@ O **conteúdo completo** no formato que o xurl espera (ver exemplo acima). Se ge
 - **Workspace root:** `/data` (container) = `/docker/openclaw-b60d/data` (host). Config: `agents.defaults.workspace: "/data"` em `/data/.openclaw/openclaw.json`.
 - **Skills:** em `/data/skills/`. No host, colocar skills em `/docker/openclaw-b60d/data/skills/` para aparecerem no Dashboard.
 - Gateway e agente devem usar o mesmo path; se o Gateway corre no container, `cwd` = `/data`. Reiniciar o Gateway após mudar config para rescannar skills.
+- **Permissões do workspace (evitar EACCES de forma definitiva):** (1) No `docker-compose.yml` do projeto no VPS, o serviço openclaw deve ter `user: "1000:1000"` para todo o processo correr como UID 1000 e criar ficheiros com esse dono. (2) No host, a pasta do workspace deve pertencer ao mesmo UID: `sudo chown -R 1000:1000 /docker/openclaw-b60d/data`. Assim o agente consegue escrever em USER.md, MEMORY.md e `memory/`. Se no futuro fizeres operações como root (ex.: `sudo cp` ou git pull como root) e os ficheiros ficarem root, corrigir de novo com o mesmo `chown -R 1000:1000`.
 
 ## Reference setup (alignment baseline)
 
