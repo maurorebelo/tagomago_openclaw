@@ -133,7 +133,12 @@ async function main() {
   log(`Done. New tweets synced: ${published}`);
 }
 
+// Exit 0 on error so the shell script still runs republish (bridge → target relay)
+process.on('unhandledRejection', (e) => {
+  log(e && (e.message || e));
+  process.exit(0);
+});
 main().catch((e) => {
   log(e.message || e);
-  process.exit(1);
+  process.exit(0);
 });
