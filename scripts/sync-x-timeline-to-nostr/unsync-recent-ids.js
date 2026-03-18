@@ -44,13 +44,13 @@ function loadSyncedIds() {
 
 function main() {
   const env = { ...process.env, HOME: process.env.HOME || '/data' };
-  log(`Fetching whoami and timeline (-n 500)...`);
+  log(`Fetching whoami and timeline (-n 100, X API max)...`);
   const myXId = fetchWhoami(env);
   if (!myXId) {
     log('Could not get whoami');
     process.exit(1);
   }
-  const timeline = fetchTimeline(env, 500);
+  const timeline = fetchTimeline(env, 100);
   const since = Math.floor(Date.now() / 1000) - DAYS * 86400;
   const myRecentIds = [];
   for (const t of timeline) {
