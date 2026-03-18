@@ -55,7 +55,7 @@ function fetchTimeline() {
   return j.data;
 }
 
-function main() {
+async function main() {
   const privHex = process.env.NOSTR_DAMUS_PRIVATE_HEX_KEY || process.env.NOSTR_PRIVATE_KEY;
   if (!privHex) {
     log('Missing NOSTR_DAMUS_PRIVATE_HEX_KEY or NOSTR_PRIVATE_KEY');
