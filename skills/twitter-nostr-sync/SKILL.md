@@ -1,29 +1,36 @@
 ---
 name: twitter-nostr-sync
-description: "Sync Twitter archive to Nostr (bridge.tagomago.me and nostr.tagomago.me) with NIP-96 media. Use when the user asks to sync tweets to Nostr, import Twitter archive, run the Twitter→Nostr sync, schedule the sync (cron/loop), run a one-off import after uploading a new archive zip to the VPS, republish bridge to nostr relay, or dedupe duplicate events on the bridge (kind 5)."
+description: "Sync X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me). Two modes: (1) Batch import from tweets.js on demand; (2) Live sync from X timeline via xurl, 2x/day. Use when the user asks to sync tweets to Nostr, import archive, run live sync, schedule sync, or dedupe bridge events."
 ---
 
 # Twitter → Nostr sync
 
-This skill defines how to sync the user's Twitter archive to their Nostr relays (bridge.tagomago.me and nostr.tagomago.me) with media uploaded via NIP-96.
+This skill defines two ways to sync the user's X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me):
 
-**If OpenClaw does not list this skill:** Install it on the VPS so the Gateway sees it (same workspace dir as nostr-nak). Run `./skills/twitter-nostr-sync/scripts/install-on-vps.sh` (script SSHs to the VPS and deploys to the workspace skills dir). Optional: `OPENCLAW_WORKSPACE_HOST=/path/on/vps` if workspace is not `/docker/openclaw-b60d/data`. Then Refresh the Dashboard.
+1. **Batch sync (on demand)** — Imports from a **tweets.js** file (Twitter export). Run when the user requests it or after uploading a new archive. Uses NIP-96 for media. Does not fetch from X API.
+2. **Live sync (scheduled)** — Fetches the user's **X timeline via xurl** and publishes new tweets to the bridge, then to the target relay. Run **2x per day** (e.g. every 12h) so recent tweets appear on Nostr without re-exporting tweets.js.
+
+**If OpenClaw does not list this skill:** Install it on the VPS so the Gateway sees it (same workspace dir as nostr-nak). Run `./skills/twitter-nostr-sync/scripts/install-on-vps.sh`. Optional: `OPENCLAW_WORKSPACE_HOST=/path/on/vps` if workspace is not `/docker/openclaw-b60d/data`. Then Refresh the Dashboard.
 
 ## When to use
 
-- User asks to "sync my tweets to Nostr", "import Twitter archive to Nostr", "run the Twitter sync", or "update tweets on Nostr".
-- User asks to install or schedule the sync inside the OpenClaw container (cron loop).
-- User asks to run a one-off import (e.g. after uploading a new archive zip to the VPS).
+- User asks to "sync my tweets to Nostr", "import Twitter archive", "run the Twitter sync", "set up live sync", or "run sync 2x per day".
+- User asks to run a one-off batch import (tweets.js) or to start the live sync loop.
 
 ## Prerequisites
 
-- **Twitter archive:** `data/tweets.js` from a Twitter export (or the full zip unzipped so `data/tweets.js` exists).
-- **Nostr keys:** Container or environment has `NOSTR_DAMUS_PRIVATE_HEX_KEY` (or `NOSTR_PRIVATE_KEY`) and optionally `NOSTR_DAMUS_PUBLIC_HEX_KEY`.
-- **VPS:** SSH access to the host where the OpenClaw container runs; container name and host from TOOLS.md or env (`NOSTR_REBROADCAST_SSH`, `NOSTR_REBROADCAST_CONTAINER`).
+- **Batch:** Twitter archive `data/tweets.js` from a Twitter export (for batch import).
+- **Live:** xurl with auth in `/data/.xurl` (see TOOLS.md); container has `xurl` in PATH.
+- **Nostr keys:** Container or environment has `NOSTR_DAMUS_PRIVATE_HEX_KEY` (or `NOSTR_PRIVATE_KEY`) and `NOSTR_DAMUS_PUBLIC_HEX_KEY` (for republish).
+- **VPS:** SSH access and container name from TOOLS.md or env (`NOSTR_REBROADCAST_SSH`, `NOSTR_REBROADCAST_CONTAINER`).
 
 ## Commands and scripts
 
-All of these run **on the VPS** (or via SSH to the VPS). Paths are relative to the workspace root. SSH host and container from TOOLS.md or env (`NOSTR_REBROADCAST_SSH`, `NOSTR_REBROADCAST_CONTAINER`).
+All of these run **on the VPS** (or via SSH). Paths relative to workspace root. SSH host and container from TOOLS.md.
+
+---
+
+### Batch sync (on demand — uses tweets.js)
 
 ### 1. One-off import (tweets.js not yet on VPS)
 
@@ -74,42 +81,68 @@ If there are duplicate events (same tweet imported twice), mark the non–NIP-96
 ./scripts/run-dedupe-keep-nip96-on-vps.sh
 ```
 
-### 6. Install sync loop inside the container (12h cron)
+### 6. Install batch sync loop inside the container (12h — still uses tweets.js)
 
-Copies `twitter-archive-to-nostr` and sync scripts into the container and starts a 12-hour loop that runs the sync inside the container. No host crontab needed.
+Copies `twitter-archive-to-nostr` and batch sync scripts into the container and starts a 12-hour loop (batch only; source remains tweets.js).
 
 ```bash
 ./scripts/install-twitter-sync-loop-in-container.sh
 ```
 
-Optional: set `TWEETS_ON_VPS` to the host path of `tweets.js` so the script copies it into the container:
+Optional: `TWEETS_ON_VPS=/docker/openclaw-b60d/data/data/tweets.js` so the script copies tweets.js into the container.
 
-```bash
-TWEETS_ON_VPS=/docker/openclaw-b60d/data/data/tweets.js ./scripts/install-twitter-sync-loop-in-container.sh
-```
-
-### 7. Run sync once inside the container (manual)
-
-If the loop is already installed:
+### 7. Run batch sync once inside the container (manual)
 
 ```bash
 ssh $SSH_HOST "docker exec $CONTAINER /data/scripts/cron-twitter-to-nostr-inside-container.sh"
 ```
 
+---
+
+### Live sync (xurl timeline → Nostr, 2x/day)
+
+Does **not** use tweets.js. Fetches the user's X timeline via `xurl timeline` and publishes new tweets to the bridge, then republishes to the target relay. Schedule every 12h for near real-time sync.
+
+### 8. Run live sync once (manual)
+
+Inside the container: ensure `scripts/sync-x-timeline-to-nostr/` is present (e.g. under `/data/scripts/`), then:
+
+```bash
+docker exec $CONTAINER /data/scripts/run-live-x-nostr-sync.sh
+```
+
+Requires: `/data/.xurl` (xurl auth), `NOSTR_DAMUS_PRIVATE_HEX_KEY`, `NOSTR_DAMUS_PUBLIC_HEX_KEY`, `node`, `nak`, `xurl` in PATH.
+
+### 9. Start live sync loop (2x/day)
+
+Runs the live sync script every 12 hours. Start in background:
+
+```bash
+docker exec -d $CONTAINER /data/scripts/run-live-x-nostr-sync-loop.sh
+```
+
+Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tracked in `/data/.twitter-nostr-synced-ids` so each run only publishes tweets not yet synced.
+
 ## File layout in the repo
 
 | Path | Purpose |
 |------|--------|
-| `skills/twitter-nostr-sync/scripts/install-on-vps.sh` | Install skill on VPS host so it appears in Gateway Dashboard (WORKSPACE SKILLS). |
-| `scripts/run-import-on-vps.sh` | Import to bridge (NIP-96, --skip-existing); tweets.js path on VPS or path to send to VPS. |
-| `scripts/bridge-to-nostr-relay.sh` | Republish bridge → nostr.tagomago.me. |
-| `scripts/run-dedupe-keep-nip96-on-vps.sh` | Publish kind 5 for duplicates on bridge. |
-| `scripts/install-twitter-sync-loop-in-container.sh` | Install and start 12h sync loop inside container. |
-| `scripts/cron-twitter-to-nostr-inside-container.sh` | One-shot sync script (runs inside container). |
-| `scripts/run-twitter-sync-loop.sh` | 12h loop wrapper (runs inside container). |
+| `skills/twitter-nostr-sync/scripts/install-on-vps.sh` | Install skill on VPS so it appears in Gateway (WORKSPACE SKILLS). |
+| **Batch (on demand)** | |
+| `scripts/run-import-on-vps.sh` | Import tweets.js to bridge (NIP-96, --skip-existing). |
+| `scripts/cron-twitter-to-nostr-inside-container.sh` | One-shot batch sync (reads tweets.js, imports to bridge, republishes). |
+| `scripts/run-twitter-sync-loop.sh` | 12h loop that runs batch sync (still tweets.js). |
+| `scripts/install-twitter-sync-loop-in-container.sh` | Install batch sync loop in container. |
 | `scripts/twitter-archive-to-nostr/` | Node project: `import-tweets.js`, `dedupe-keep-nip96.js`, `package.json`. |
-| `docs/CRON_INSIDE_OPENCLAW.md` | Cron inside container: mount volumes, variables. |
-| `docs/CRON_TWITTER_TO_NOSTR.md` | Host cron (alternative): 2×/day from host. |
+| **Live (xurl, 2x/day)** | |
+| `scripts/sync-x-timeline-to-nostr/sync.js` | Fetches xurl timeline, publishes new tweets to bridge (Node + nostr-tools). |
+| `scripts/run-live-x-nostr-sync.sh` | One-shot live sync (xurl → bridge → republish to target). |
+| `scripts/run-live-x-nostr-sync-loop.sh` | 12h loop that runs live sync. |
+| **Shared** | |
+| `scripts/bridge-to-nostr-relay.sh` | Republish bridge → nostr.tagomago.me. |
+| `scripts/run-dedupe-keep-nip96-on-vps.sh` | Dedupe duplicates on bridge (kind 5). |
+| `references/cron_inside_container.md` | Batch cron inside container: mounts, env. |
+| `SYNC.md` | Repo sync (canonical = VPS). |
 
 ## Environment variables (optional)
 

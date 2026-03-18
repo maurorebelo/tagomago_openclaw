@@ -1,0 +1,9 @@
+{
+  "name": "sync-x-timeline-to-nostr",
+  "type": "module",
+  "private": true,
+  "description": "Fetch X timeline via xurl and publish new tweets to Nostr bridge (live sync)",
+  "dependencies": {
+    "nostr-tools": "^2.4.0"
+  }
+}
