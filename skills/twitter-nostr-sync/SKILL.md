@@ -140,6 +140,8 @@ Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tr
 | `scripts/run-live-x-nostr-sync-loop.sh` | 12h loop that runs live sync. |
 | **Shared** | |
 | `scripts/bridge-to-nostr-relay.sh` | Republish bridge → nostr.tagomago.me. |
+| `scripts/republish-bridge-to-nostr.sh` | One-shot: bridge → nostr.tagomago.me. |
+| `scripts/republish-to-public-relays.sh` | One-shot: bridge (or target) → public relays (damus.io, nostr.land, etc.). Use for historical tweets.js imports. |
 | `scripts/run-dedupe-keep-nip96-on-vps.sh` | Dedupe duplicates on bridge (kind 5). |
 | `references/cron_inside_container.md` | Batch cron inside container: mounts, env. |
 | `SYNC.md` | Repo sync (canonical = VPS). |

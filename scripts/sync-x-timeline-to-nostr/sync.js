@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * Live sync: fetch X timeline via xurl, publish new tweets to Nostr bridge.
- * Run inside OpenClaw container (or env with xurl, HOME=/data, NOSTR_DAMUS_*).
- * Schedule 2x/day (e.g. every 12h) for near real-time sync.
+ * Live sync: fetch X timeline via xurl, publish new tweets to Nostr.
+ * Publishes to: your relays (bridge + nostr.tagomago.me) + public relays (damus, nostr.land, etc.)
+ * so others see your notes and your relays keep your copy.
  *
  * Usage: node sync.js [--dry-run]
- * Env: NOSTR_DAMUS_PRIVATE_HEX_KEY (or NOSTR_PRIVATE_KEY), NOSTR_BRIDGE_RELAY (default wss://bridge.tagomago.me),
- *       HOME=/data so xurl finds /data/.xurl
+ * Env: NOSTR_DAMUS_PRIVATE_HEX_KEY, NOSTR_BRIDGE_RELAY, NOSTR_TARGET_RELAY,
+ *       NOSTR_PUBLIC_RELAYS (comma-separated, default: relay.damus.io,nostr.land,nos.lol,relay.nostr.band),
+ *       HOME=/data for xurl
  */
 
 import { execSync } from 'child_process';
@@ -19,6 +20,14 @@ import { SimplePool } from 'nostr-tools';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const BRIDGE_RELAY = process.env.NOSTR_BRIDGE_RELAY || 'wss://bridge.tagomago.me';
+const TARGET_RELAY = process.env.NOSTR_TARGET_RELAY || 'wss://nostr.tagomago.me';
+// Public relays so others see your notes; your relays (bridge + target) keep your copy
+const PUBLIC_RELAYS_STR = process.env.NOSTR_PUBLIC_RELAYS || 'wss://relay.damus.io,wss://nostr.land,wss://nos.lol,wss://relay.nostr.band';
+const ALL_RELAYS = [
+  BRIDGE_RELAY,
+  TARGET_RELAY,
+  ...PUBLIC_RELAYS_STR.split(',').map((r) => r.trim()).filter(Boolean),
+];
 const SYNCED_IDS_PATH = process.env.TWITTER_NOSTR_SYNCED_IDS || '/data/.twitter-nostr-synced-ids';
 const XURL_LIMIT = parseInt(process.env.XURL_TIMELINE_LIMIT || '100', 10);
 const dryRun = process.argv.includes('--dry-run');
@@ -78,7 +87,7 @@ async function main() {
   const syncedIds = loadSyncedIds();
   const sk = hexToBytes(privHex);
   const pool = new SimplePool();
-  const relayUrls = [BRIDGE_RELAY];
+  const relayUrls = ALL_RELAYS;
   let published = 0;
 
   // Process newest first (API returns reverse chronological)

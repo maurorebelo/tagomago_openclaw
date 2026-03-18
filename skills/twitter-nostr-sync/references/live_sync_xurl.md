@@ -27,10 +27,20 @@ docker exec -d openclaw-b60d-openclaw-1 /data/scripts/run-live-x-nostr-sync-loop
 
 Optional: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h).
 
+## Where events are published
+
+Each new tweet is published to **all** of these (so others see them on public relays and your relays keep your copy):
+
+- Your relays: `NOSTR_BRIDGE_RELAY` (bridge.tagomago.me), `NOSTR_TARGET_RELAY` (nostr.tagomago.me)
+- Public relays: `NOSTR_PUBLIC_RELAYS` (comma-separated). Default: `wss://relay.damus.io,wss://nostr.land,wss://nos.lol,wss://relay.nostr.band`
+
+Override `NOSTR_PUBLIC_RELAYS` to add or remove public relays.
+
 ## Env (optional)
 
 - `NOSTR_BRIDGE_RELAY` — default wss://bridge.tagomago.me
 - `NOSTR_TARGET_RELAY` — default wss://nostr.tagomago.me
+- `NOSTR_PUBLIC_RELAYS` — comma-separated public relays (see above)
 - `TWITTER_NOSTR_SYNCED_IDS` — path for synced tweet IDs file (default `/data/.twitter-nostr-synced-ids`)
 - `XURL_TIMELINE_LIMIT` — number of tweets to fetch (default 100)
 
@@ -44,3 +54,13 @@ Optional: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h).
 | **Use case** | One-off or periodic import of archive | Near real-time sync without re-exporting |
 
 You can run both: batch for historical archive, live for new tweets.
+
+## Historical posts (tweets.js import) on public relays
+
+Posts imported from tweets.js live only on your relays (bridge + nostr.tagomago.me) until you republish them to public relays. To push them so others see them on damus.io, nostr.land, etc.:
+
+```bash
+docker exec openclaw-b60d-openclaw-1 /data/scripts/republish-to-public-relays.sh
+```
+
+Uses `NOSTR_DAMUS_PUBLIC_HEX_KEY` and publishes each event from the bridge to `NOSTR_PUBLIC_RELAYS` (default: relay.damus.io, nostr.land, nos.lol, relay.nostr.band). Run once; can take a while if you have many events.
