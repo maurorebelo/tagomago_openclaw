@@ -15,8 +15,20 @@ B="/tmp/republish-to-public-$$.jsonl"
 # --paginate: multiple REQs with decreasing 'until' until we have limit or no more (fetches full history)
 echo "Fetching events from $SOURCE (paginated, up to 50000)..."
 nak req -k 1 -a "$PUBKEY" -l 50000 --paginate --paginate-interval 1s "$SOURCE" 2>/dev/null > "$B" || true
+
+# SAFETY: only republish events whose .pubkey matches PUBKEY (never publish others' events)
+B_FILTERED="/tmp/republish-filtered-$$.jsonl"
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  if jq -e --arg pk "$PUBKEY" '.pubkey == $pk' <<< "$line" >/dev/null 2>&1; then
+    echo "$line" >> "$B_FILTERED"
+  fi
+done < "$B"
+rm -f "$B"
+mv "$B_FILTERED" "$B" 2>/dev/null || touch "$B"
+
 n=$(wc -l < "$B" 2>/dev/null || echo 0)
-echo "Events from $SOURCE: $n. Publishing to public relays..."
+echo "Events with pubkey $PUBKEY: $n. Publishing ONLY these to public relays..."
 echo "Public relays: $PUBLIC_RELAYS_STR"
 
 repub=0
