@@ -73,12 +73,13 @@ async function main() {
   const before = all.filter((ev) => ev.created_at < refTime).sort((a, b) => b.created_at - a.created_at);
   try { pool.close(); } catch (_) {}
 
-  console.log('Event', eventId.slice(0, 16) + '...', 'created_at', refTime, new Date(refTime * 1000).toISO());
+  const ts = (t) => (t != null && !isNaN(t) ? new Date(Number(t) * 1000).toISOString() : String(t));
+  console.log('Event', eventId.slice(0, 16) + '...', 'created_at', refTime, ts(refTime));
   console.log('Content (first 120 chars):', (ref.content || '').slice(0, 120));
   console.log('');
   console.log('Your kind-1 events BEFORE it (most recent first), max 15:');
   before.slice(0, 15).forEach((ev, i) => {
-    console.log((i + 1) + '.', ev.id.slice(0, 16) + '...', 'created_at', ev.created_at, new Date(ev.created_at * 1000).toISO());
+    console.log((i + 1) + '.', ev.id.slice(0, 16) + '...', 'created_at', ev.created_at, ts(ev.created_at));
     console.log('   ', (ev.content || '').slice(0, 100) + (ev.content && ev.content.length > 100 ? '...' : ''));
   });
   console.log('');
