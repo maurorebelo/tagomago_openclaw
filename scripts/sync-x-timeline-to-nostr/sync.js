@@ -118,8 +118,18 @@ async function main() {
     }
   }
 
-  pool.close();
-  if (published > 0 && !dryRun) saveSyncedIds(syncedIds);
+  try {
+    pool.close();
+  } catch (e) {
+    log(`Pool close: ${e.message}`);
+  }
+  if (published > 0 && !dryRun) {
+    try {
+      saveSyncedIds(syncedIds);
+    } catch (e) {
+      log(`Save synced ids: ${e.message}`);
+    }
+  }
   log(`Done. New tweets synced: ${published}`);
 }
 
