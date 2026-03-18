@@ -123,6 +123,12 @@ docker exec -d $CONTAINER /data/scripts/run-live-x-nostr-sync-loop.sh
 
 Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tracked in `/data/.twitter-nostr-synced-ids` so each run only publishes tweets not yet synced.
 
+## Safety
+
+- **Live sync:** `xurl timeline` returns the *home* timeline (user + followed accounts). The sync must publish **only** tweets where `author_id === xurl whoami.data.id`. `sync.js` enforces this; do not remove the filter.
+- **Republish to public relays:** Only publish events where `event.pubkey === NOSTR_DAMUS_PUBLIC_HEX_KEY`. `republish-to-public-relays.sh` filters with `jq` before publishing; do not bypass.
+- Events already sent to public relays cannot be unpublished.
+
 ## File layout in the repo
 
 | Path | Purpose |

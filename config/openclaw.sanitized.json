@@ -1,0 +1,336 @@
+{
+  "plugins": {
+    "allow": [
+      "whatsapp",
+      "discord",
+      "telegram",
+      "slack",
+      "nostr",
+      "googlechat"
+    ],
+    "entries": {
+      "whatsapp": {
+        "enabled": true
+      },
+      "discord": {
+        "enabled": true
+      },
+      "imessage": {
+        "enabled": false
+      },
+      "telegram": {
+        "enabled": true
+      },
+      "slack": {
+        "enabled": true
+      },
+      "nostr": {
+        "enabled": true
+      },
+      "signal": {
+        "enabled": false
+      },
+      "googlechat": {
+        "enabled": true
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "streaming": "partial",
+      "botToken": "<REDACTED>",
+      "enabled": true
+    }
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.3.1",
+    "lastTouchedAt": "2026-03-09T18:58:34.564Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-06T14:10:46.547Z",
+    "lastRunVersion": "2026.3.1",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "update": {
+    "channel": "stable",
+    "checkOnStart": false
+  },
+  "browser": {
+    "headless": true,
+    "noSandbox": true,
+    "defaultProfile": "openclaw"
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "nexos": {
+        "baseUrl": "https://api.nexos.ai/v1",
+        "apiKey": "<REDACTED>",
+        "auth": "<REDACTED>",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "d2cd8d34-db82-4481-a1b0-248dae113ca8",
+            "name": "Nexos Gpt 5 2",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "3700526c-e729-494f-a15e-d7dac885e297",
+            "name": "Nexos Gpt 4 1",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "eeb11449-69ec-40d9-a983-b004f0834a9d",
+            "name": "Nexos Gemini 3 Flash Preview",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "030cd123-659a-4e89-a6de-a1153be1f02a",
+            "name": "Nexos Anthropic Claude Opus 4 6 @ Default",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "2fd84145-3601-488e-a3db-98d469e352bd",
+            "name": "Nexos Anthropic Claude Sonnet 4 5 @ 20250929",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "21c6940c-dfd1-4545-9adf-925de0e9948a",
+            "name": "Nexos Claude Opus 4 20250514",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          },
+          {
+            "id": "0f6c69cb-ee63-43d6-9b40-4e7ef10993bb",
+            "name": "Nexos Grok 4 0709",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
+            "maxTokens": "<REDACTED>",
+            "compat": {
+              "supportsStore": true,
+              "supportsDeveloperRole": true,
+              "supportsReasoningEffort": false
+            }
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "Nexos Gpt 5 2"
+      },
+      "models": {
+        "openai/gpt-5.2": {
+          "alias": "ChatGPT 5.2"
+        },
+        "openai/gpt-5.1-codex": {
+          "alias": "ChatGPT 5.1 Codex"
+        },
+        "openai/gpt-5": {
+          "alias": "ChatGPT 5"
+        },
+        "openai/gpt-5-mini": {
+          "alias": "ChatGPT 5 Mini"
+        },
+        "openai/gpt-4.1": {
+          "alias": "ChatGPT 4.1"
+        },
+        "nexos/d2cd8d34-db82-4481-a1b0-248dae113ca8": {
+          "alias": "Nexos Gpt 5 2"
+        },
+        "nexos/3700526c-e729-494f-a15e-d7dac885e297": {
+          "alias": "Nexos Gpt 4 1"
+        },
+        "nexos/eeb11449-69ec-40d9-a983-b004f0834a9d": {
+          "alias": "Nexos Gemini 3 Flash Preview"
+        },
+        "nexos/030cd123-659a-4e89-a6de-a1153be1f02a": {
+          "alias": "Nexos Anthropic Claude Opus 4 6 @ Default"
+        },
+        "nexos/2fd84145-3601-488e-a3db-98d469e352bd": {
+          "alias": "Nexos Anthropic Claude Sonnet 4 5 @ 20250929"
+        },
+        "nexos/21c6940c-dfd1-4545-9adf-925de0e9948a": {
+          "alias": "Nexos Claude Opus 4 20250514"
+        },
+        "nexos/0f6c69cb-ee63-43d6-9b40-4e7ef10993bb": {
+          "alias": "Nexos Grok 4 0709"
+        }
+      },
+      "workspace": "/data",
+      "compaction": {
+        "mode": "safeguard"
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "name": "main",
+        "model": "openai/gpt-5-mini"
+      }
+    ]
+  },
+  "tools": {
+    "exec": {
+      "host": "gateway",
+      "security": "full",
+      "ask": "off",
+      "pathPrepend": [
+        "/data/linuxbrew/.linuxbrew/bin"
+      ]
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "bash": true,
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "hooks": {
+    "token": "<REDACTED>"
+  },
+  "gateway": {
+    "mode": "local",
+    "controlUi": {
+      "dangerouslyAllowHostHeaderOriginFallback": true,
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
+    },
+    "auth": "<REDACTED>",
+    "trustedProxies": [
+      "127.0.0.1/32"
+    ],
+    "remote": {
+      "token": "<REDACTED>"
+    }
+  },
+  "skills": {
+    "entries": {
+      "notion": {
+        "apiKey": "<REDACTED>"
+      }
+    },
+    "load": {
+      "extraDirs": [
+        "/data/skills"
+      ]
+    }
+  }
+}

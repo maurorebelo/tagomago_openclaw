@@ -12,9 +12,11 @@
 
 ## What lives where
 
-- **In the repo (GitHub):** Memory files, skills, scripts, config example, sanitized config. No **data/**. No docs/ or media/ unless they exist on the VPS.
+- **In the repo (GitHub):** Memory files (`memory/`, MEMORY.md, AGENTS.md, etc.), skills (with their **references/** — VPS-specific docs live inside each skill), scripts, config example, sanitized config. No **data/**.
 - **Only on VPS (not in GitHub):** `.openclaw/`, `.env`, **data/** (zips, DBs, etc.).
 - **Local data/ (Mac):** Mirror of **VPS /data/data/** — rsync pull/push.
+
+**Reorganization:** Former top-level `docs/` and `media/inbound/` were removed (canonical = VPS, which didn’t have them). Their useful content is now inside skills: e.g. `skills/health-analytics/references/apple_health_sleep_vps.md`, `health_analytics_vps.md`; `skills/twitter-nostr-sync/references/cron_inside_container.md`. **memory/** stays — it’s the agent’s daily/long-term memory and exists on the VPS; keep it in the repo and in sync.
 
 ## Keeping everything aligned
 

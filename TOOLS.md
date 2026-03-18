@@ -12,6 +12,8 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - **tweets.js on VPS:** `/docker/openclaw-b60d/data/data/tweets.js` (after unzipping archive under `/docker/openclaw-b60d/data/`)
 - **Bridge:** wss://bridge.tagomago.me — **Target:** wss://nostr.tagomago.me
 
+**Safety (lesson learned):** Content that wasn’t the user’s was published under their name in two ways. (1) **Republish:** events from the bridge were pushed to public relays without checking `event.pubkey === NOSTR_DAMUS_PUBLIC_HEX_KEY`; fix: `republish-to-public-relays.sh` now keeps only events that pass that check. (2) **Live sync:** `xurl timeline` returns the *home* timeline (includes others’ tweets); the script was publishing all of them as Nostr notes signed with the user’s key; fix: `sync.js` now filters with `author_id === xurl whoami.data.id` so only the user’s own tweets are synced. We cannot unpublish what was already sent to relays. From now on only the user’s content is published.
+
 ## xurl (X/Twitter) — tokens no segredo
 
 O **xurl** não lê credenciais de variáveis de ambiente genéricas: lê apenas do ficheiro **`~/.xurl`** (YAML). Se os tokens de acesso estão no “segredo” do OpenClaw (Dashboard ou `.env` do container), o xurl só os usa se esse conteúdo **existir no ficheiro** `~/.xurl` dentro do container.

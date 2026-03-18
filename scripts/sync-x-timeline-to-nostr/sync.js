@@ -56,8 +56,13 @@ function saveSyncedIds(ids) {
   writeFileSync(SYNCED_IDS_PATH, [...ids].sort().join('\n') + '\n', 'utf8');
 }
 
-function fetchTimeline() {
-  const env = { ...process.env, HOME: process.env.HOME || '/data' };
+function fetchWhoami(env) {
+  const out = execSync('xurl whoami', { encoding: 'utf8', env });
+  const j = JSON.parse(out);
+  return j?.data?.id || null;
+}
+
+function fetchTimeline(env) {
   const out = execSync(`xurl timeline -n ${XURL_LIMIT}`, { encoding: 'utf8', env });
   const j = JSON.parse(out);
   if (!j.data || !Array.isArray(j.data)) return [];
@@ -71,9 +76,22 @@ async function main() {
     process.exit(1);
   }
 
+  const env = { ...process.env, HOME: process.env.HOME || '/data' };
+  let myXId;
+  try {
+    myXId = fetchWhoami(env);
+  } catch (e) {
+    log('xurl whoami failed: ' + e.message);
+    process.exit(1);
+  }
+  if (!myXId) {
+    log('Could not get authenticated user id from xurl whoami');
+    process.exit(1);
+  }
+
   let timeline;
   try {
-    timeline = fetchTimeline();
+    timeline = fetchTimeline(env);
   } catch (e) {
     log('xurl timeline failed: ' + e.message);
     process.exit(1);
@@ -81,6 +99,13 @@ async function main() {
 
   if (timeline.length === 0) {
     log('No tweets in timeline');
+    return;
+  }
+
+  // Only sync tweets authored by the authenticated user (not others from home timeline)
+  timeline = timeline.filter((t) => t.author_id === myXId);
+  if (timeline.length === 0) {
+    log('No own tweets in timeline (only others). Nothing to sync.');
     return;
   }
 
