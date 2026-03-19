@@ -63,7 +63,10 @@ function getOurTweetIds(env) {
   const cap = 800;
   let collected = 0;
   while (collected < cap) {
-    const pageSize = Math.min(100, cap - collected);
+    const remaining = cap - collected;
+    if (remaining <= 0) break;
+    let pageSize = Math.min(100, remaining);
+    if (pageSize < 5) pageSize = Math.min(100, 5);
     let path = `/2/users/${myXId}/tweets?max_results=${pageSize}&tweet.fields=created_at,author_id`;
     if (paginationToken) path += `&pagination_token=${encodeURIComponent(paginationToken)}`;
     const out = execSync(`xurl ${JSON.stringify(path)}`, { encoding: 'utf8', env });

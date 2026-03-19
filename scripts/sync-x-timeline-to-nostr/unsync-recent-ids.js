@@ -34,13 +34,17 @@ function fetchMyTweets(env, myXId, maxTotal) {
   let paginationToken = '';
   const cap = Math.min(Math.max(1, maxTotal), 800);
   while (tweets.length < cap) {
-    const pageSize = Math.min(100, cap - tweets.length);
+    const remaining = cap - tweets.length;
+    if (remaining <= 0) break;
+    let pageSize = Math.min(100, remaining);
+    if (pageSize < 5) pageSize = Math.min(100, 5);
     let path = `/2/users/${myXId}/tweets?max_results=${pageSize}&tweet.fields=created_at,author_id`;
     if (paginationToken) path += `&pagination_token=${encodeURIComponent(paginationToken)}`;
     const out = execSync(`xurl ${JSON.stringify(path)}`, { encoding: 'utf8', env });
     const j = JSON.parse(out);
     if (!j.data || !Array.isArray(j.data) || j.data.length === 0) break;
     tweets.push(...j.data);
+    if (tweets.length > cap) tweets.length = cap;
     paginationToken = j.meta?.next_token;
     if (!paginationToken) break;
   }
