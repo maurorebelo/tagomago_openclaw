@@ -1,6 +1,6 @@
 ---
 name: twitter-nostr-sync
-description: "Sync X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me). Two modes: (1) Batch import from tweets.js on demand; (2) Live sync from X timeline via xurl, 2x/day. Use when the user asks to sync tweets to Nostr, import archive, run live sync, schedule sync, or dedupe bridge events."
+description: "Sync X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me). Two modes: (1) Batch import from tweets.js on demand; (2) Live sync from YOUR tweets only (X API user tweets via xurl), 2x/day. Use when the user asks to sync tweets to Nostr, import archive, run live sync, schedule sync, or dedupe bridge events."
 ---
 
 # Twitter → Nostr sync
@@ -8,7 +8,7 @@ description: "Sync X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me)
 This skill defines two ways to sync the user's X/Twitter to Nostr (bridge.tagomago.me and nostr.tagomago.me):
 
 1. **Batch sync (on demand)** — Imports from a **tweets.js** file (Twitter export). Run when the user requests it or after uploading a new archive. Uses NIP-96 for media. Does not fetch from X API.
-2. **Live sync (scheduled)** — Fetches the user's **X timeline via xurl** and publishes new tweets to the bridge, then to the target relay. Run **2x per day** (e.g. every 12h) so recent tweets appear on Nostr without re-exporting tweets.js.
+2. **Live sync (scheduled)** — Fetches **only the authenticated user's tweets** via X API `GET /2/users/{id}/tweets` (xurl), not the home timeline. Publishes new tweets to the bridge, then to the target relay. Run **2x per day** (e.g. every 12h).
 
 **If OpenClaw does not list this skill:** Install it on the VPS so the Gateway sees it (same workspace dir as nostr-nak). Run `./skills/twitter-nostr-sync/scripts/install-on-vps.sh`. Optional: `OPENCLAW_WORKSPACE_HOST=/path/on/vps` if workspace is not `/docker/openclaw-b60d/data`. Then Refresh the Dashboard.
 
@@ -99,9 +99,9 @@ ssh $SSH_HOST "docker exec $CONTAINER /data/scripts/cron-twitter-to-nostr-inside
 
 ---
 
-### Live sync (xurl timeline → Nostr, 2x/day)
+### Live sync (xurl user tweets → Nostr, 2x/day)
 
-Does **not** use tweets.js. Fetches the user's X timeline via `xurl timeline` and publishes new tweets to the bridge, then republishes to the target relay. Schedule every 12h for near real-time sync.
+Does **not** use tweets.js. Fetches **your tweets only** via `xurl '/2/users/{whoami.id}/tweets?...'` (paginates). Publishes new tweets to the bridge, then republishes to the target relay. Schedule every 12h for near real-time sync.
 
 ### 8. Run live sync once (manual)
 
@@ -126,7 +126,7 @@ Optional env: `LIVE_X_NOSTR_INTERVAL_SEC=43200` (default 12h). New tweets are tr
 ## Safety
 
 - **Republish to public relays (confirmed):** Only publish events where `event.pubkey === NOSTR_DAMUS_PUBLIC_HEX_KEY`. `republish-to-public-relays.sh` filters with `jq` before publishing; do not bypass. This was the confirmed cause of others’ content reaching public relays.
-- **Live sync (precaution):** Sync must publish **only** tweets where `author_id === xurl whoami.data.id`. `sync.js` enforces this. (X API “Get Timeline” doc describes the *user’s* timeline, not home; we didn’t verify which endpoint `xurl timeline` uses.)
+- **Live sync:** Uses `GET /2/users/{id}/tweets` so only your composed tweets are fetched (not the home timeline). `sync.js` still filters by `author_id` as defense in depth.
 - Events already sent to public relays cannot be unpublished. To **hide erroneous events** (NIP-09): run `delete-erroneous-sync-events.js` (see below). This only affects events **you** signed (your pubkey); events with other people’s pubkeys that were republished to relays cannot be deleted by you — only the authors could publish a kind-5 for those.
 
 ## Deleting erroneous sync events (NIP-09)
@@ -137,7 +137,7 @@ If content that wasn’t yours was published **with your Nostr key** (e.g. from 
 docker exec -e HOME=/data $CONTAINER node /data/scripts/sync-x-timeline-to-nostr/delete-erroneous-sync-events.js --last-hours=2
 ```
 
-To delete **all** your kind-1 notes from the last 2 hours (no tweet check): use `--last-hours=2`. Run with `--dry-run` first to see which event IDs would be marked. The script considers “your” tweets = those in `xurl timeline -n 800` with `author_id === whoami`; events whose `r` tag points to a tweet ID not in that set are marked for deletion. If you have more than 800 of your own tweets, review the dry-run output to avoid deleting old valid syncs. **We cannot delete events that have another person’s pubkey** (e.g. sent to public relays by the republish bug); only those authors can request deletion.
+To delete **all** your kind-1 notes from the last 2 hours (no tweet check): use `--last-hours=2`. Run with `--dry-run` first to see which event IDs would be marked. The script considers “your” tweets = IDs from `GET /2/users/{id}/tweets` (up to 800, paginated) with `author_id === whoami`; events whose `r` tag points to a tweet ID not in that set are marked for deletion. If you have more than 800 of your own tweets, review the dry-run output. **We cannot delete events that have another person’s pubkey** (e.g. sent to public relays by the republish bug); only those authors can request deletion.
 
 ## File layout in the repo
 
@@ -151,7 +151,7 @@ To delete **all** your kind-1 notes from the last 2 hours (no tweet check): use 
 | `scripts/install-twitter-sync-loop-in-container.sh` | Install batch sync loop in container. |
 | `scripts/twitter-archive-to-nostr/` | Node project: `import-tweets.js`, `dedupe-keep-nip96.js`, `package.json`. |
 | **Live (xurl, 2x/day)** | |
-| `scripts/sync-x-timeline-to-nostr/sync.js` | Fetches xurl timeline, publishes new tweets to bridge (Node + nostr-tools). |
+| `scripts/sync-x-timeline-to-nostr/sync.js` | Fetches your tweets via xurl `GET /2/users/{id}/tweets`, publishes to bridge (Node + nostr-tools). |
 | `scripts/sync-x-timeline-to-nostr/delete-erroneous-sync-events.js` | NIP-09: publish kind-5 to hide events that reference tweets not yours (run with --dry-run first). |
 | `scripts/run-live-x-nostr-sync.sh` | One-shot live sync (xurl → bridge → republish to target). |
 | `scripts/run-live-x-nostr-sync-loop.sh` | 12h loop that runs live sync. |

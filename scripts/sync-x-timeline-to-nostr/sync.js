@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
- * Live sync: fetch X timeline via xurl, publish new tweets to Nostr.
+ * Live sync: fetch YOUR tweets only via X API GET /2/users/{id}/tweets (not the home timeline).
  * Publishes to: your relays (bridge + nostr.tagomago.me) + public relays (damus, nostr.land, etc.)
- * so others see your notes and your relays keep your copy.
  *
  * Usage: node sync.js [--dry-run]
  * Env: NOSTR_DAMUS_PRIVATE_HEX_KEY, NOSTR_BRIDGE_RELAY, NOSTR_TARGET_RELAY,
- *       NOSTR_PUBLIC_RELAYS (comma-separated, default: relay.damus.io,nostr.land,nos.lol,relay.nostr.band),
- *       HOME=/data for xurl
+ *       NOSTR_PUBLIC_RELAYS, HOME=/data for xurl,
+ *       XURL_USER_TWEETS_LIMIT (default 100, max ~3200 with pagination; API max 100 per request)
  */
 
 import { execSync } from 'child_process';
@@ -29,7 +28,10 @@ const ALL_RELAYS = [
   ...PUBLIC_RELAYS_STR.split(',').map((r) => r.trim()).filter(Boolean),
 ];
 const SYNCED_IDS_PATH = process.env.TWITTER_NOSTR_SYNCED_IDS || '/data/.twitter-nostr-synced-ids';
-const XURL_LIMIT = parseInt(process.env.XURL_TIMELINE_LIMIT || '100', 10);
+const USER_TWEETS_LIMIT = parseInt(
+  process.env.XURL_USER_TWEETS_LIMIT || process.env.XURL_TIMELINE_LIMIT || '100',
+  10
+);
 const dryRun = process.argv.includes('--dry-run');
 
 function log(msg) {
@@ -62,11 +64,26 @@ function fetchWhoami(env) {
   return j?.data?.id || null;
 }
 
-function fetchTimeline(env) {
-  const out = execSync(`xurl timeline -n ${XURL_LIMIT}`, { encoding: 'utf8', env });
-  const j = JSON.parse(out);
-  if (!j.data || !Array.isArray(j.data)) return [];
-  return j.data;
+/** X API v2: only tweets composed by this user (not home timeline). Paginates up to USER_TWEETS_LIMIT. */
+function fetchMyTweets(env, myXId, maxTotal) {
+  const tweets = [];
+  let paginationToken = '';
+  const cap = Math.min(Math.max(1, maxTotal), 3200);
+  while (tweets.length < cap) {
+    const pageSize = Math.min(100, cap - tweets.length);
+    let path = `/2/users/${myXId}/tweets?max_results=${pageSize}&tweet.fields=created_at,author_id`;
+    if (paginationToken) path += `&pagination_token=${encodeURIComponent(paginationToken)}`;
+    const out = execSync(`xurl ${JSON.stringify(path)}`, { encoding: 'utf8', env });
+    const j = JSON.parse(out);
+    if (j.errors && j.errors.length) {
+      throw new Error(j.errors.map((e) => e.detail || e.message || JSON.stringify(e)).join('; '));
+    }
+    if (!j.data || !Array.isArray(j.data) || j.data.length === 0) break;
+    tweets.push(...j.data);
+    paginationToken = j.meta?.next_token;
+    if (!paginationToken) break;
+  }
+  return tweets;
 }
 
 async function main() {
@@ -91,21 +108,21 @@ async function main() {
 
   let timeline;
   try {
-    timeline = fetchTimeline(env);
+    timeline = fetchMyTweets(env, myXId, USER_TWEETS_LIMIT);
   } catch (e) {
-    log('xurl timeline failed: ' + e.message);
+    log('xurl /2/users/.../tweets failed: ' + e.message);
     process.exit(1);
   }
 
   if (timeline.length === 0) {
-    log('No tweets in timeline');
+    log('No tweets returned for your user (GET /2/users/{id}/tweets)');
     return;
   }
 
-  // Only sync tweets authored by the authenticated user (not others from home timeline)
-  timeline = timeline.filter((t) => t.author_id === myXId);
+  // Defense in depth: API should only return your tweets
+  timeline = timeline.filter((t) => !t.author_id || String(t.author_id) === String(myXId));
   if (timeline.length === 0) {
-    log('No own tweets in timeline (only others). Nothing to sync.');
+    log('No tweets after author filter. Nothing to sync.');
     return;
   }
 

@@ -4,7 +4,7 @@
  * so the next sync run will re-publish them to Nostr (e.g. after they were deleted by kind-5 or never synced).
  *
  * Usage: node unsync-recent-ids.js [--days=7]
- *        node unsync-recent-ids.js --all   (remove ALL your tweet IDs that appear in timeline -n 100, so sync re-publishes them; may duplicate some already on Nostr)
+ *        node unsync-recent-ids.js --all   (remove ALL your tweet IDs from last ~500 user tweets, so sync re-publishes; may duplicate some on Nostr)
  * Env: HOME=/data, PATH with /data/bin first for xurl wrapper.
  */
 import { execSync } from 'child_process';
@@ -28,11 +28,23 @@ function fetchWhoami(env) {
   return j?.data?.id || null;
 }
 
-function fetchTimeline(env, n) {
-  const out = execSync(`xurl timeline -n ${n}`, { encoding: 'utf8', env });
-  const j = JSON.parse(out);
-  if (!j.data || !Array.isArray(j.data)) return [];
-  return j.data;
+/** GET /2/users/{id}/tweets — only your posts (not home timeline). */
+function fetchMyTweets(env, myXId, maxTotal) {
+  const tweets = [];
+  let paginationToken = '';
+  const cap = Math.min(Math.max(1, maxTotal), 800);
+  while (tweets.length < cap) {
+    const pageSize = Math.min(100, cap - tweets.length);
+    let path = `/2/users/${myXId}/tweets?max_results=${pageSize}&tweet.fields=created_at,author_id`;
+    if (paginationToken) path += `&pagination_token=${encodeURIComponent(paginationToken)}`;
+    const out = execSync(`xurl ${JSON.stringify(path)}`, { encoding: 'utf8', env });
+    const j = JSON.parse(out);
+    if (!j.data || !Array.isArray(j.data) || j.data.length === 0) break;
+    tweets.push(...j.data);
+    paginationToken = j.meta?.next_token;
+    if (!paginationToken) break;
+  }
+  return tweets;
 }
 
 function loadSyncedIds() {
@@ -46,17 +58,17 @@ function loadSyncedIds() {
 
 function main() {
   const env = { ...process.env, HOME: process.env.HOME || '/data' };
-  log(`Fetching whoami and timeline (-n 100, X API max)...`);
+  log(`Fetching whoami and your tweets (GET /2/users/{id}/tweets, up to 800)...`);
   const myXId = fetchWhoami(env);
   if (!myXId) {
     log('Could not get whoami');
     process.exit(1);
   }
-  const timeline = fetchTimeline(env, 100);
+  const timeline = fetchMyTweets(env, myXId, ALL_IN_TIMELINE ? 500 : 800);
   const since = Math.floor(Date.now() / 1000) - DAYS * 86400;
   const myRecentIds = [];
   for (const t of timeline) {
-    if (t.author_id !== myXId || !t.id) continue;
+    if (!t.id || (t.author_id != null && String(t.author_id) !== String(myXId))) continue;
     if (ALL_IN_TIMELINE) {
       myRecentIds.push(String(t.id));
     } else {
@@ -66,7 +78,7 @@ function main() {
       if (ts >= since) myRecentIds.push(String(t.id));
     }
   }
-  log(ALL_IN_TIMELINE ? `Your tweets in timeline (-n 100): ${myRecentIds.length}` : `Your tweets in last ${DAYS} days (from timeline): ${myRecentIds.length}`);
+  log(ALL_IN_TIMELINE ? `Your tweets (fetched): ${myRecentIds.length}` : `Your tweets in last ${DAYS} days (from fetch): ${myRecentIds.length}`);
 
   const synced = loadSyncedIds();
   const toRemove = myRecentIds.filter((id) => synced.has(id));

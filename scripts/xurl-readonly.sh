@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Read-only xurl wrapper: only allows whoami and timeline. Logs every invocation; blocks post and any other subcommand.
-# Install: put this script as "xurl" in a dir that appears before the real xurl in PATH (e.g. /data/bin),
-# and set XURL_REAL to the real xurl binary (e.g. /usr/local/bin/xurl or $(which xurl) before installing the wrapper).
-#
-# Usage from agent/scripts: call "xurl" as usual; only "xurl whoami" and "xurl timeline ..." succeed.
+# Read-only xurl wrapper: allows whoami, timeline (legacy), and GET /2/users/{id}/tweets (your tweets only).
+# Blocks post and other write APIs.
 
 set -e
 AUDIT_LOG="${XURL_AUDIT_LOG:-/data/.xurl-audit.log}"
@@ -24,11 +21,16 @@ fi
 CMD="$*"
 FIRST_ARG="${1:-}"
 
-# Allow only whoami and timeline (timeline with any args)
 ALLOWED=0
 case "$FIRST_ARG" in
   whoami)   ALLOWED=1 ;;
   timeline) ALLOWED=1 ;;
+  *)
+    # GET /2/users/NUMERIC_ID/tweets?... (list only your own tweets; read-only)
+    if [[ "$FIRST_ARG" =~ ^/2/users/[0-9]+/tweets ]]; then
+      ALLOWED=1
+    fi
+    ;;
 esac
 
 log_line() {
@@ -38,7 +40,7 @@ log_line() {
 
 if [ "$ALLOWED" -eq 0 ]; then
   log_line "BLOCKED"
-  echo "xurl-readonly: Only 'xurl whoami' and 'xurl timeline ...' are allowed. Blocked: xurl $CMD" >&2
+  echo "xurl-readonly: Allowed: whoami, timeline, /2/users/{id}/tweets. Blocked: xurl $CMD" >&2
   exit 1
 fi
 

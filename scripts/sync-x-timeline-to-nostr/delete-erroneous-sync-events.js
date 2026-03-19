@@ -58,12 +58,24 @@ function getOurTweetIds(env) {
   const myXId = whoami?.data?.id;
   if (!myXId) throw new Error('xurl whoami did not return data.id');
 
-  const timelineOut = execSync('xurl timeline -n 800', { encoding: 'utf8', env });
-  const timeline = JSON.parse(timelineOut);
-  const tweets = timeline?.data || [];
   const ourIds = new Set();
-  for (const t of tweets) {
-    if (t.author_id === myXId && t.id) ourIds.add(String(t.id));
+  let paginationToken = '';
+  const cap = 800;
+  let collected = 0;
+  while (collected < cap) {
+    const pageSize = Math.min(100, cap - collected);
+    let path = `/2/users/${myXId}/tweets?max_results=${pageSize}&tweet.fields=created_at,author_id`;
+    if (paginationToken) path += `&pagination_token=${encodeURIComponent(paginationToken)}`;
+    const out = execSync(`xurl ${JSON.stringify(path)}`, { encoding: 'utf8', env });
+    const j = JSON.parse(out);
+    const tweets = j?.data || [];
+    if (!Array.isArray(tweets) || tweets.length === 0) break;
+    for (const t of tweets) {
+      if (t.id && (!t.author_id || String(t.author_id) === String(myXId))) ourIds.add(String(t.id));
+    }
+    collected += tweets.length;
+    paginationToken = j.meta?.next_token;
+    if (!paginationToken) break;
   }
   return ourIds;
 }
