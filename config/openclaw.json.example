@@ -26,7 +26,11 @@
     "exec": {
       "host": "gateway",
       "security": "full",
-      "ask": "off"
+      "ask": "off",
+      "pathPrepend": [
+        "/data/bin",
+        "/data/linuxbrew/.linuxbrew/bin"
+      ]
     }
   },
   "gateway": {

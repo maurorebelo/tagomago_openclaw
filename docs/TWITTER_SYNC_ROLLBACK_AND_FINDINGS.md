@@ -23,6 +23,18 @@ There is **no** `xurl post`, **no** `POST /2/tweets`, **no** Twitter write in th
 
 So **if new posts appeared on your X timeline**, they were **not** created by the sync script’s intended code path. Possibilities include: another process or user calling **`xurl` by full path** (bypassing `/data/bin` wrapper), another app with OAuth, manual posting, or confusion with RTs / feed. The VPS **audit log** (`/data/.xurl-audit.log`) only sees calls that use the **wrapped** `xurl` in `PATH`.
 
+### Important follow-up finding: agent PATH order can bypass the wrapper
+
+The sanitized OpenClaw config snapshot showed:
+
+- `tools.exec.pathPrepend = ["/data/linuxbrew/.linuxbrew/bin"]`
+
+That order is **unsafe** for the `xurl` wrapper model, because the agent can resolve the real Linuxbrew `xurl` before `/data/bin/xurl`. To make the wrapper effective for agent `exec`, the VPS config should use:
+
+- `tools.exec.pathPrepend = ["/data/bin", "/data/linuxbrew/.linuxbrew/bin"]`
+
+Without that order, a clean `/data/.xurl-audit.log` does **not** prove the agent did not use `xurl`; it only proves it did not use the wrapped `xurl` from `/data/bin`.
+
 ## Chronology (recent commits touching this)
 
 See `git log` from `628d299` to `HEAD`: live sync added, then republish safety, author filter, user-tweets endpoint, xurl read-only wrapper, delete/unsync helpers, etc.

@@ -27,6 +27,26 @@ Result: the repo (and anyone reading it) always sees the same shape as the dashb
 - **Script:** `scripts/sanitize-openclaw-config.js` (writes `config/openclaw.sanitized.json`).
 - **Wrapper:** `scripts/sync-openclaw-config-to-repo.sh` (runs the script; optionally git add/commit/push if you uncomment and have credentials on the VPS).
 
+## Exec PATH hardening
+
+If the agent uses the `xurl` read-only wrapper in `/data/bin`, the OpenClaw config on the VPS must keep `/data/bin` ahead of Linuxbrew in `tools.exec.pathPrepend`:
+
+```json
+"tools": {
+  "exec": {
+    "host": "gateway",
+    "security": "full",
+    "ask": "off",
+    "pathPrepend": [
+      "/data/bin",
+      "/data/linuxbrew/.linuxbrew/bin"
+    ]
+  }
+}
+```
+
+Why this matters: if `/data/linuxbrew/.linuxbrew/bin` comes first, agent `exec` can resolve the real `xurl` binary before the wrapper, bypassing both the write block and `/data/.xurl-audit.log`.
+
 ## Skills
 
 - **Workspace skills** (in this repo): live in `skills/` and are deployed to `/data/skills/` on the VPS (health-analytics, twitter-nostr-sync, nostr2notion, etc.).
