@@ -64,7 +64,24 @@ Not after small talk or simple task requests.
 
 ---
 
-## Job 3 — Notion Scan (Heartbeat, twice/week, offset from Nostr)
+## Job 3 — Blog Scan (Heartbeat, weekly)
+
+**When:** Triggered by heartbeat. Run only if `lastBlogScan` in state is > 7 days ago.
+
+```bash
+/data/skills/user-profiler/scripts/scan-blog.py
+```
+
+- Pulls the 5 most recent posts from two RSS feeds:
+  - `tagomago.me/feed/` — main blog, mostly English
+  - `tagomago.me/category/visao/feed/` — Portuguese posts (migrated from VQEB/Closte)
+- Blog posts are treated as **curated, intentional signals** — heavier weight than Nostr notes
+- Analyzes with GPT-4o against existing profile
+- No confirmation needed — background work
+
+---
+
+## Job 4 — Notion Scan (Heartbeat, twice/week, offset from Nostr)
 
 **When:** Triggered by heartbeat. Run only if `lastNotionScan` in state is > 3 days ago.
 
@@ -84,7 +101,7 @@ Not after small talk or simple task requests.
 
 ---
 
-Both scans report briefly at next conversation: "Nostr scan: N reinforcements, N contradictions, N candidates."
+All background scans report briefly at next conversation: "Nostr scan: N reinforcements, N contradictions, N candidates." Same format for blog and Notion scans.
 
 ---
 
@@ -128,6 +145,7 @@ skills/user-profiler/
 └── scripts/
     ├── manage-profile.py         ← CRUD: candidates, patterns, contradictions in USER.md
     ├── scan-nostr.py             ← Nostr scan (heartbeat job, state key: lastNostrScan)
+    ├── scan-blog.py              ← Blog scan: tagomago.me EN + PT/VQEB (heartbeat job, state key: lastBlogScan)
     └── scan-notion.py            ← Readwise + Snipd scan (heartbeat job, state key: lastNotionScan)
 ```
 
