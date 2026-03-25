@@ -1,0 +1,7 @@
+interface:
+  display_name: "Twitter Archive → Nostr"
+  short_description: "Import Twitter archive (tweets.js) into Nostr relays with media upload."
+  default_prompt: "Use $twitter-archive-import to import my Twitter archive to Nostr."
+
+policy:
+  allow_implicit_invocation: true

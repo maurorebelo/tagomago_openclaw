@@ -1,0 +1,7 @@
+interface:
+  display_name: "Health Import"
+  short_description: "Ingest Apple Health (XML) and Weltory (JSON) exports into DuckDB."
+  default_prompt: "Use $health-import to ingest my health export or fix a parsing issue."
+
+policy:
+  allow_implicit_invocation: true

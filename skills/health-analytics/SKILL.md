@@ -1,87 +1,95 @@
 ---
 name: health-analytics
-description: "Ingest Apple Health and Weltory ZIP exports into a persistent local DuckDB; build consolidated tables (raw → normalised → daily_features) and update them on new imports; optionally sync Notion workouts; answer health questions and run correlation analyses from the local database. Use when the user uploads a health ZIP, asks to update the DB, or asks health/trend/correlation questions."
+description: Consolidate imported health data into daily_features, run correlation analysis between Apple Health, Weltory and sleep, generate reports and answer health questions from the local DuckDB. Use when the user asks for health trends, correlations, sleep analysis, HRV patterns, or wants to rebuild the consolidated tables after a new import.
 ---
 
-# Health Analytics
+# health-analytics
 
-Use this skill when the user uploads an Apple Health or Weltory ZIP, asks to update the health database, sync Notion workouts, or asks health questions that must be answered from the local database. When the user asks for **correlation analysis** between Welltory, Apple Health and sleep, **run the proposed correlation analysis** (see Correlation analysis below).
+Consolidates, analyses, and queries health data from the shared DuckDB populated by `health-import`.
 
-## Paths (workspace-relative)
+## Paths
 
-- **Workspace root:** Directory that contains `skills/` (e.g. repo root or container `/data`). The database and imports live under workspace.
-- database: `data/health/duckdb/health.duckdb` (single DuckDB; in container `/data/data/health/duckdb/health.duckdb`; must be writable by node)
-- imports: `data/health/imports`
-- extracted: `data/health/extracted`
-- logs: `data/health/logs`
-- cache: `data/health/cache`
-
-Scripts live in the skill `scripts/` dir (e.g. `skills/health-analytics/scripts/`). Run from workspace root or with paths adjusted.
-
-**Apple Health export:** Raw export is **XML** (not JSON). Zip path in this setup: `/data/APPLE_HEALTH_data_export.zip`; main file inside: `apple_health_export/exportar.xml`. Ingest **sleep phases** and all other Apple Health data from this XML into the **same** DuckDB. See [references/apple_health_export.md](references/apple_health_export.md) for paths, Record types (e.g. `HKCategoryTypeIdentifierSleepAnalysis`), and table `sleep_phases`.
+| Item | Path in container |
+|---|---|
+| Shared DuckDB | `/data/skills/health-analytics/data/duckdb/health.duckdb` |
+| Scripts | `/data/skills/health-analytics/scripts/` |
+| Correlation scripts | `/data/skills/health-analytics/weltory_tips/` |
+| References | `/data/skills/health-analytics/references/` |
 
 ## Rules
 
-- Never claim data was imported unless the import script completed successfully.
-- Never rebuild the database if it already exists unless the user explicitly asks.
-- **Não rodar nova extração (ingest) a não ser que o ZIP/XML/JSON tenham mudado.** O ingest verifica path + mtime + size do ficheiro; se já tiver importado esse mesmo ficheiro, ignora e devolve `status: skipped` (use `--force` para forçar re-import). Ajustes de parse e população do DB fazem-se sem repetir extração desnecessária.
-- Always ingest incrementally; deduplicate by native source record id when present, else by `timestamp + metric + source`.
-- Always append an audit record to the import log.
-- Prefer DuckDB for storage and SQL, Python for parsing.
-- When answering health questions, query the database first; use exact dates, values, and source names; state uncertainty when data is incomplete.
-- Do not give medical advice as diagnosis; frame suggestions as observations and hypotheses grounded in the user's data.
+- Never claim data is up to date unless the DB was queried in this session.
+- Do not give medical diagnoses; frame findings as observations and hypotheses grounded in the user's data.
+- When data is incomplete or a metric is missing from `daily_features`, debug with the order in `references/daily_features_debug.md` before assuming it was never imported.
+- Run `consolidate.py` after any new import before answering trend questions.
 
-## Pipeline: import → consolidated tables
+## Consolidation
 
-The skill owns the full flow from ZIP import to consolidated DuckDB as in `weltory_tips/estrategia_pipeline_duckdb_openclaw.md` (inside the skill):
+Rebuild the normalised tables and `daily_features` from whatever is in the source tables:
 
-1. **init_db.py** — Creates the DB, wellness schema (01_schema.sql), and source tables (`sleep_phases`, `weltory_rr`, `import_log`).
-2. **ingest.py** — Detects Apple Health vs Weltory ZIP, unpacks, parses XML or rr.json, upserts into source tables, **then runs consolidate** so `wellness.raw_*`, normalised tables, and `wellness.daily_features` are rebuilt. **Skip:** if the same file (path + mtime + size) was already imported, ingest skips and returns `status: skipped`; use `--force` to re-ingest. Focus further work on parse/DB population adjustments, not re-running extraction unless the ZIP/XML/JSON change.
-3. **consolidate.py** — (Runnable alone.) Runs `weltory_tips/auto_populate_raw_tables.py` (inside the skill) then `02_daily_features.sql`. Use `--clear-raw` for a full rebuild.
+```bash
+cd /data/skills/health-analytics
+python scripts/consolidate.py
+# Full rebuild (clears raw_* first)
+python scripts/consolidate.py --clear-raw
+```
 
-## Ingestion workflow
-
-1. Ensure the database exists: run `python scripts/init_db.py` (from skill dir or workspace).
-2. Run `python scripts/ingest.py --zip <path-to-zip>`. Ingest detects Apple vs Weltory, parses, writes to source tables, then runs consolidate so consolidated tables are up to date.
-   - **Verificação:** se o mesmo ZIP (mesmo path + mtime + size) já tiver sido importado, o ingest devolve `"status": "skipped"` e não repete a extração. Use `--force` para forçar re-import (ex.: após alterar o parse).
-3. Summarize: source detected, rows inserted, date range. Tell the user what questions can now be answered.
-
-## Notion sync workflow
-
-1. Check for `NOTION_API_KEY` and `NOTION_DATABASE_ID`.
-2. Run `python scripts/sync_notion_workouts.py`; upsert into `notion_workouts` by Notion page id.
-3. If credentials are missing, say so and do not pretend the sync ran.
-
-## Query workflow
-
-1. Run `python scripts/query.py --question "<user-question>"`.
-2. Base the answer on returned results; include concrete values, dates, trends; separate correlations from hypotheses.
+This runs `weltory_tips/auto_populate_raw_tables.py` then `02_daily_features.sql`.
 
 ## Correlation analysis
 
-When the user asks for **correlation analysis** between Welltory, Apple Health and sleep (or daily features / pipeline insights):
+When the user asks for correlations between Weltory, Apple Health, and sleep:
 
-1. Ensure consolidated tables exist (run `scripts/consolidate.py` if needed).
-2. **Run the proposed correlation analysis** using scripts in **weltory_tips/** (inside the skill, at `skills/health-analytics/weltory_tips/`):
-   - `weltory_tips/03_correlation_queries.sql` — run against `wellness.daily_features`: coverage counts, Pearson/Spearman pairs, and **quantile analysis** (steps in quintiles vs avg_rmssd to detect optimal zone, e.g. “HRV optimal ≈ 7k–10k steps”). From container: `/data/skills/health-analytics/weltory_tips/03_correlation_queries.sql`.
-   - `weltory_tips/welltory_apple_health_correlation.py` — Welltory ↔ Apple Health correlation.
-3. Report results with concrete values and plausibility; separate correlations from hypotheses. See [references/pipeline_weltory_apple_health.md](references/pipeline_weltory_apple_health.md) for strategy and script list.
+1. Ensure `daily_features` is up to date: run `consolidate.py` if needed.
+2. Run the SQL correlation queries:
 
-**Deploy:** The install script deploys the skill (which includes `weltory_tips`); a single deploy puts everything under `skills/health-analytics/` on the VPS.
+```bash
+duckdb /data/skills/health-analytics/data/duckdb/health.duckdb \
+  < weltory_tips/03_correlation_queries.sql
+```
 
-## Required tools and env
+3. Run the Python correlation script:
 
-- Tools: `python3`, `duckdb`, `sqlite3`, `unzip`, `jq`, `curl`; filesystem and exec access to workspace.
-- Python packages: `duckdb`, `pandas`, `requests`, `python-dateutil`, `xmltodict` or `lxml`. Install before running ingest on a fresh system (e.g. `pip install duckdb pandas python-dateutil`; plus `xmltodict` or `lxml` for XML).
-- Notion (optional): `NOTION_API_KEY`, `NOTION_DATABASE_ID`.
+```bash
+python weltory_tips/welltory_apple_health_correlation.py
+```
 
-**Métrica em falta em daily_features** — Pode ser por: (1) não entrou no ingest; (2) entrou mas não foi mapeada; (3) foi mapeada com nome diferente; (4) foi para uma tabela raw que `_daily_base` não consome. **Ordem de debug:** ver [references/daily_features_debug.md](references/daily_features_debug.md): 1) valor na fonte (XML/JSON); 2) ingest escreve em tabela de origem; 3) autopopulate lê essa coluna; 4) nome da métrica = o que 02_daily_features.sql espera; 5) a raw alimenta _daily_base.
+4. Report results with concrete values; separate correlations from hypotheses; include plausibility commentary (sleep→HRV, activity→HRV, circadian rhythm).
+
+See `references/pipeline_weltory_apple_health.md` for strategy and full script list.
+
+## Query workflow
+
+```bash
+python scripts/query.py --question "<user-question>"
+```
+
+Base answers on returned values; include dates, exact numbers, source names; note when data coverage is incomplete.
+
+## Notion sync (optional)
+
+```bash
+NOTION_API_KEY=<key> NOTION_DATABASE_ID=<id> python scripts/sync_notion_workouts.py
+```
+
+Upserts workouts into `notion_workouts` by Notion page ID.
+
+## daily_features table
+
+Central table built by `02_daily_features.sql`. Key columns:
+
+- `date_local` — date of awakening (sleep associated to wake date, not start)
+- Weltory: `mean_rmssd`, `mean_rr`, `energy`, `stress`, `resilience`
+- Apple Health: `steps`, `active_cal`, `exercise_min`, `sleep_duration_h`
+- Derived: `hrv_baseline`, `hrv_ratio`, `sleep_score`, `activity_load`, `lag_*`
+
+## Debug: metric missing from daily_features
+
+See `references/daily_features_debug.md` — order: (1) value in source table → (2) autopopulate maps it → (3) column name matches SQL → (4) `_daily_base` consumes the raw table.
 
 ## References
 
-- **Install and wiring:** See [references/install.md](references/install.md).
-- **Schema and tables:** See [references/schema.md](references/schema.md).
-- **Métrica em falta em daily_features (causas e ordem de debug):** See [references/daily_features_debug.md](references/daily_features_debug.md).
-- **Apple Health export (XML, sleep phases, single DB):** See [references/apple_health_export.md](references/apple_health_export.md).
-- **Weltory export (JSON, stress/energy/health em rr.json e data_flow):** See [references/weltory_export.md](references/weltory_export.md).
-- **Pipeline Welltory + Apple Health + sono (estratégia e scripts em weltory_tips):** See [references/pipeline_weltory_apple_health.md](references/pipeline_weltory_apple_health.md).
+- **Pipeline strategy:** `references/pipeline_weltory_apple_health.md`
+- **daily_features debug:** `references/daily_features_debug.md`
+- **Schema and tables:** `references/schema.md`
+- **VPS-specific notes:** `references/health_analytics_vps.md`
