@@ -104,6 +104,26 @@ Use this as the baseline when comparing “my install vs expected” (see [docs/
 | **Config** | `/data/.openclaw/openclaw.json` |
 | **Restart Gateway** | Restart the OpenClaw Gateway process/container after changing config so it rescans skills. (Document here how you do it on your VPS if different from default.) |
 
+## Telegram file uploads
+
+When a file is sent via Telegram, OpenClaw downloads it to:
+```
+/data/.openclaw/media/inbound/
+```
+
+Files are saved with generated UUID names (e.g. `file_2---69e79c76-fab2-4e68-87ff-d86a970c3a66.pdf`), **not** the original filename. The agent must not assume the file is at `/data/<original_name>`.
+
+**Procedure when a file arrives via Telegram:**
+1. List `/data/.openclaw/media/inbound/` sorted by modification time
+2. Identify the most recently added file with the expected extension
+3. Use that full path to read or process it
+
+```bash
+ls -lt /data/.openclaw/media/inbound/ | head -5
+```
+
+For PDFs, **always use the `nano-pdf` bundled skill** — never try to read the raw PDF file directly. It extracts text in chunks and avoids context/token limit issues. Read its SKILL.md before using (`openclaw skills list` → nano-pdf).
+
 ## What Goes Here
 
 Things like:

@@ -184,6 +184,16 @@ If a bundled skill is `✓ ready` in `openclaw skills list`, use it directly. Ne
 
 **Rule:** Before using any CLI tool (tesseract, ffmpeg, convert, pdftotext, etc.), verify it exists with `which <tool>`. If it's missing, say so clearly and stop — do not proceed, invent a workaround, or fabricate output. Never claim a tool is running if `which` returned nothing.
 
+### Telegram file uploads
+
+Files sent via Telegram land in `/data/.openclaw/media/inbound/` with UUID names — **not** the original filename. Never assume the file is at `/data/<original_name>`. To find the file:
+
+```bash
+ls -lt /data/.openclaw/media/inbound/ | head -5
+```
+
+**For PDFs: always use the `nano-pdf` bundled skill.** Never read the raw PDF directly — it loads the whole file into context and hits token limits. nano-pdf processes in chunks.
+
 ### Available tools (verified)
 
 - **tesseract** (`/usr/bin/tesseract`, v5.5.0) — local OCR, no API needed. Languages: `eng`, `por`, `ita`. Usage: `tesseract image.jpg output -l por` → creates `output.txt`. Installed 2026-03-24 via apt.
