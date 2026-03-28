@@ -184,6 +184,16 @@ If a bundled skill is `✓ ready` in `openclaw skills list`, use it directly. Ne
 
 **Rule:** Before using any CLI tool (tesseract, ffmpeg, convert, pdftotext, etc.), verify it exists with `which <tool>`. If it's missing, say so clearly and stop — do not proceed, invent a workaround, or fabricate output. Never claim a tool is running if `which` returned nothing.
 
+### Restarting OpenClaw
+
+OpenClaw runs as a foreground process inside the container. There is no systemctl, no service manager. To restart:
+
+```bash
+ssh hostinger-vps "docker restart openclaw-b60d-openclaw-1"
+```
+
+Never try `systemctl`, `service`, or `openclaw gateway restart` inside the container — they will fail.
+
 ### Telegram file uploads
 
 Files sent via Telegram land in `/data/.openclaw/media/inbound/` with UUID names — **not** the original filename. Never assume the file is at `/data/<original_name>`. To find the file:
