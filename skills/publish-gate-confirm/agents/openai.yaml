@@ -1,0 +1,7 @@
+interface:
+  display_name: "Publish gate (Telegram approval)"
+  short_description: "Queue email, X, or Nostr drafts; Mauro approves on Telegram; host sends with SMTP, xurl-real, nak-real. Read docs/public-write-gates.md."
+  default_prompt: "For any public write (email, X, Nostr), use publish-gate-confirm enqueue scripts only; never gog gmail send, nak event/publish, or xurl post from the agent. Reads use read-only tools per TOOLS.md."
+
+policy:
+  allow_implicit_invocation: true
