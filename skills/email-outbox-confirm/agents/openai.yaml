@@ -1,0 +1,7 @@
+interface:
+  display_name: "Email outbox (confirm on host)"
+  short_description: "Queue email drafts from the agent; Mauro approves and sends on the VPS host. No SMTP inside the agent path."
+  default_prompt: "Use email-outbox-confirm: enqueue with enqueue-email-draft.py only; Mauro approves via publish-gate-confirm Telegram daemon (or TTY on host). Never send mail, gog gmail send, or SMTP from the container."
+
+policy:
+  allow_implicit_invocation: true

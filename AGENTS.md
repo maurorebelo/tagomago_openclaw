@@ -49,7 +49,9 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 These are absolute. No exceptions, no interpretation.
 
-- **Never post to Twitter/X.** `xurl` is read-only: `whoami`, `timeline`, `GET /2/users/{id}/tweets` only. Never run `xurl post` or any write command.
+- **Never post to Twitter/X from the agent.** `xurl` must be the read-only wrapper: `whoami`, `timeline`, `GET /2/users/{id}/tweets` only. Never run `xurl post` or any write command. To post, queue with `publish-gate-confirm` (`enqueue-tweet-draft.py`) and approve on Telegram on the host.
+- **Never publish to Nostr from the agent.** Use `nak` only through the read-only wrapper (`/data/bin/nak` → `nak-real`) for `req` / `fetch` / `decode` / etc. Never run `nak event`, `nak publish`, or piping into `nak event`. To publish, queue with `enqueue-nostr-draft.py` and approve on Telegram on the host.
+- **Never send email from the agent** via `gog gmail send`, `himalaya`, `msmtp`, or raw SMTP. Gmail via **gog** must stay **read-only** (`--gmail-scope readonly`). Outbound mail: `email-outbox-confirm` enqueue + host approval (`docs/public-write-gates.md`).
 - **Never invent data.** For "my last tweet", timeline, whoami, or any API/tool result: run the actual command and report only what it returns. If the command fails, say so. Never substitute with made-up content.
 - **Reply style: conversational, short, direct.** No blog-post answers. No lists unless the user asks for a list.
 - **Instruction vs doubt:** Read from the language. If the user sounds unsure → explain. If the user sounds certain → act. Never answer an instruction with a menu of options.
@@ -120,7 +122,9 @@ Apply the change they asked for. You do not need to refuse to modify "your own" 
 
 **Never do (no exceptions):**
 
-- Post to Twitter/X. xurl is read-only here (whoami, timeline, `GET /2/users/{id}/tweets` for sync). Do not run `xurl post` or any tweet-creation command. See TOOLS.md.
+- Post to Twitter/X from the agent. xurl is read-only here. Do not run `xurl post`. Use the publish gate for drafts (TOOLS.md, `docs/public-write-gates.md`).
+- Publish to Nostr from the agent (`nak event`, `nak publish`, etc.). Use the publish gate for drafts.
+- Send email from the agent (`gog gmail send`, SMTP CLIs, etc.). Use the email outbox enqueue + host approval; keep gog Gmail read-only.
 
 ## Group Chats
 
@@ -208,7 +212,8 @@ ls -lt /data/.openclaw/media/inbound/ | head -5
 
 - **tesseract** (`/usr/bin/tesseract`, v5.5.0) — local OCR, no API needed. Languages: `eng`, `por`, `ita`. Usage: `tesseract image.jpg output -l por` → creates `output.txt`. Installed 2026-03-24 via apt.
 - **xurl** (`/data/bin/xurl`) — read-only wrapper. Allows: `whoami`, `timeline`, user tweets. Blocks: `post` and all write operations. Logs to `/data/.xurl-audit.log`.
-- **nak** (`/data/linuxbrew/.linuxbrew/bin/nak`) — Nostr CLI for querying relays and publishing events.
+- **nak** — with gates installed: `/data/bin/nak` read-only wrapper → `nak-real`; allows `req`, `fetch`, `decode`, `encode`, `verify`, `gift unwrap`; blocks `event`, `publish`, etc. Logs to `/data/.nak-audit.log`. See `scripts/nak-readonly.sh`, `docs/public-write-gates.md`.
+- **Public writes (email, X, Nostr)** — agent queues JSON only; host **`skills/publish-gate-confirm/scripts/telegram_approval_daemon.py`** sends after Telegram approve. Skill: `publish-gate-confirm`.
 
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
