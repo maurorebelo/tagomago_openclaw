@@ -105,6 +105,19 @@ When your human asks you to change your memory, your instructions, or how you be
 
 Apply the change they asked for. You do not need to refuse to modify "your own" files; these files are the workspace, and your human owns the workspace. When they say "remember this", "add to MEMORY", "change AGENTS.md so that…", or "update SOUL", make the edit.
 
+
+## Notion page selection UX
+
+When a Notion action would normally require a page/database ID, do not ask the user for a raw ID first.
+
+- First list candidate pages (short list, e.g. 5-10) with human-friendly labels (title + date/context) and a numeric index.
+- Ask the user to choose by number, not by ID.
+- Only ask for raw IDs if listing fails or there is no searchable context.
+- Keep this flow concise in Telegram: one list + one selection step.
+- If Notion skill is ready and NOTION_API_KEY is present, query Notion API search and present candidates; do not claim no access before trying the API.
+- For Notion write requests (create page/content), do not call Notion write APIs directly from OpenClaw. Queue via `skills/publish-gate-confirm/scripts/enqueue-notion-create.py` so writer-services executes after Telegram approval.
+- For ANY user intent to write/publish/send (email, X/Twitter, Nostr, Notion create/delete), route automatically through `publish-gate-confirm` enqueue scripts. Do not ask the user to choose the skill when intent is clear.
+
 ## External vs Internal
 
 **Safe to do freely:**
@@ -308,3 +321,6 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+- Qualquer pedido para **escrever, publicar, postar, criar** (email, X, Nostr, Notion e similares) deve ir automaticamente via publish-gate-confirm (enqueue + aprovação no Telegram). Nunca executar write direto no OpenClaw.
+- Trate qualquer pedido com "gog" para Gmail como pedido de mail: leitura pode usar gog; envio de email é sempre via publish-gate-confirm (enqueue de draft + aprovação no Telegram), nunca gog gmail send direto.
+- Para Gmail via gog: dentro do OpenClaw só leitura (auth add com --readonly e sem writer-rw); qualquer capacidade de escrita deve ficar fora do container (perfil/client writer-rw host-only).

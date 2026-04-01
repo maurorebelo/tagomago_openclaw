@@ -31,6 +31,13 @@ ls -lt /data/.openclaw/media/inbound/ | head -5
 
 ## Verified binaries
 
+## Toda.bio DB quick facts (2026-03-31)
+- Postgres EC2: `i-00dd892cdd1941be1` (Name `DATABASE_biob_todabio`) — Public IP `72.44.46.213` — port `5432`
+- Connectivity check from this container (python socket): **can connect to `72.44.46.213:5432`**; cannot reach private `172.31.17.146:5432` (timeout).
+- Container does **not** have `nc` or `psql` installed; use python socket for port checks.
+- DB credentials live in aws-broker secret/env (Hostinger). Not exposed as env vars in this container by default.
+- (User-confirmed) `psql` auth with app creds (`TODABIO_V2_PGUSER`/`TODABIO_V2_PGPASSWORD`) against DB `biob_todabio_v2` works.
+
 | Tool | Path | Notes |
 |------|------|-------|
 | `xurl` | `/data/bin/xurl` | Read-only wrapper. Logs to `/data/.xurl-audit.log`. Real binary at `/data/bin/xurl-real`. |

@@ -44,11 +44,11 @@ fi
 
 B="/tmp/live-sync-bridge-$$.jsonl"
 log "Republishing bridge → $TARGET_RELAY..."
-nak req -k 1 -a "$PUBKEY" -l 50000 "$BRIDGE_RELAY" 2>/dev/null > "$B" || true
+/data/bin/nak-real req -k 1 -a "$PUBKEY" -l 50000 "$BRIDGE_RELAY" 2>/dev/null > "$B" || true
 n=$(wc -l < "$B" 2>/dev/null || echo 0)
 repub=0
 while read -r line; do
-  [ -n "$line" ] && echo "$line" | nak event "$TARGET_RELAY" 2>/dev/null | grep -q success && repub=$((repub+1)) || true
+  [ -n "$line" ] && echo "$line" | /data/bin/nak-real event "$TARGET_RELAY" 2>/dev/null | grep -q success && repub=$((repub+1)) || true
 done < "$B"
 rm -f "$B"
 log "Republished to $TARGET_RELAY: $repub"

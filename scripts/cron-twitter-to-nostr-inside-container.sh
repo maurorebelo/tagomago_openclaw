@@ -7,7 +7,7 @@
 #   - TWEETS_JS_PATH (default: /data/twitter/data/tweets.js)
 #   - IMPORT_DIR (default: /data/twitter-archive-to-nostr) — must contain import-tweets.js, package.json
 #   - NOSTR_DAMUS_PRIVATE_HEX_KEY (or NOSTR_PRIVATE_KEY) in env
-#   - node, npm, nak in PATH
+#   - node, npm, /data/bin/nak-real in PATH
 #
 # Usage: run from inside the container, e.g.:
 #   /data/scripts/cron-twitter-to-nostr-inside-container.sh
@@ -47,7 +47,7 @@ node import-tweets.js "$TWEETS_JS_PATH" --skip-existing --upload-media || { log 
 
 # 2) Republish bridge -> nostr.tagomago.me
 log "Republishing to $TARGET_RELAY..."
-nak req -k 1 -a "$PUBKEY" -l "$NOSTR_BRIDGE_LIMIT" "$BRIDGE_RELAY" 2>/dev/null > "$B" || true
+/data/bin/nak-real req -k 1 -a "$PUBKEY" -l "$NOSTR_BRIDGE_LIMIT" "$BRIDGE_RELAY" 2>/dev/null > "$B" || true
 n=$(wc -l < "$B" 2>/dev/null || echo 0)
 log "Events on bridge: $n"
 if [ "$n" -eq 0 ]; then
@@ -56,7 +56,7 @@ if [ "$n" -eq 0 ]; then
 fi
 repub=0
 while read -r line; do
-  [ -n "$line" ] && echo "$line" | nak event "$TARGET_RELAY" 2>/dev/null | grep -q success && repub=$((repub+1)) || true
+  [ -n "$line" ] && echo "$line" | /data/bin/nak-real event "$TARGET_RELAY" 2>/dev/null | grep -q success && repub=$((repub+1)) || true
 done < "$B"
 rm -f "$B"
 log "Republished to $TARGET_RELAY: $repub"

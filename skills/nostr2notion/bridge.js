@@ -17,7 +17,7 @@ import "dotenv/config";
 import { SimplePool } from "nostr-tools";
 import { Client } from "@notionhq/client";
 
-const NOTION_API_KEY = process.env.NOTION_API_KEY;
+const NOTION_API_KEY = process.env.NOTION_RW_INTEGRATION_KEY || process.env.NOTION_API_KEY;
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
 const NOTION_TITLE_PROPERTY = process.env.NOTION_TITLE_PROPERTY || "Title";
 /** Property used for dedupe (must exist in DB as rich_text). */
