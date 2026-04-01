@@ -35,6 +35,7 @@ ls -lt /data/.openclaw/media/inbound/ | head -5
 |------|------|-------|
 | `xurl` | `/data/bin/xurl` | Read-only wrapper. Logs to `/data/.xurl-audit.log`. Real binary at `/data/bin/xurl-real`. |
 | `nak` | `/data/bin/nak` (recommended) | Read-only wrapper (`scripts/nak-readonly.sh`) → `nak-real`. Logs `/data/.nak-audit.log`. Without wrapper, Linuxbrew `nak` can still publish — fix PATH. |
+| `gog` | `/data/bin/gog` (recommended) | Read-only wrapper (`scripts/gog-readonly.sh`) → `gog-real`. Blocks `gmail send` and Drive destructive commands in-container. |
 | `tesseract` | `/usr/bin/tesseract` | OCR. Languages: eng, por, ita |
 
 Before using any CLI tool, verify with `which <tool>`. If missing, say so — do not fabricate output.
@@ -43,10 +44,11 @@ Before using any CLI tool, verify with `which <tool>`. If missing, say so — do
 
 ## Write gates (email, X, Nostr, Gmail)
 
-Canonical doc: **`docs/public-write-gates.md`**.
+Canonical doc: **`docs/public-write-gates.md`** (includes **reading order for cloud agents** at the top).
 
-- **Telegram approvals:** `skills/publish-gate-confirm/` — one daemon for email + X + Nostr drafts.
+- **Telegram approvals:** `skills/publish-gate-confirm/` — one daemon for email + X + Nostr drafts and destructive delete gates (Google Drive/Notion).
 - **gog / Gmail:** re-auth with `gog auth add … --services gmail --gmail-scope readonly --force-consent` so the agent cannot send mail via API.
+- **Delete gates:** enqueue with `enqueue-gdrive-delete.py` / `enqueue-notion-delete.py`; host daemon runs `GDRIVE_DELETE_RUNNER` / `NOTION_DELETE_RUNNER` after Telegram approval.
 - **Cron / host jobs** that must publish should call **`nak-real`** / **`xurl-real`** by absolute path, not the agent `PATH`.
 
 ---
