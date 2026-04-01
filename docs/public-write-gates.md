@@ -1,6 +1,22 @@
-# Public write gates (email, Nostr, X, Gmail)
+# Public write gates (email, Nostr, X, workout writes, Gmail, destructive deletes)
 
-Goal: the **OpenClaw agent** drafts or reads; **human approval on Telegram** (or TTY) performs **sends/posts** from the **VPS host**, where credentials live. Aligns with `docs/openclaw_handoff_agent.md`.
+Goal: the **OpenClaw agent** drafts or reads; **human approval on Telegram** (or TTY) performs **writes/deletes** from the **VPS host**, where credentials live. Aligns with `docs/openclaw_handoff_agent.md`.
+
+## Reading order for implementers (including cloud agents)
+
+Use this doc as the **primary checklist**. A cloud agent without SSH to the VPS can still align **repo policy, skills, and scripts**; **every shell step in §§1–5 must run on the VPS** (or whoever operates it), not “from the Mac” unless you explicitly use your own machine.
+
+Read **in order**:
+
+1. **This file** (`docs/public-write-gates.md`) — target architecture, PATH, wrappers, gog readonly, queues, checklist.
+2. **`skills/publish-gate-confirm/SKILL.md`** — Telegram daemon, env vars, script paths, host vs container.
+3. **`skills/email-outbox-confirm/SKILL.md`** — email enqueue only; points to publish-gate for host steps.
+4. **`AGENTS.md`** — red lines: no `xurl post`, no `nak event`/`publish`, no `gog gmail send` from the agent; use enqueue + gate.
+5. **`TOOLS.md`** — `/data/bin` wrappers, `nak`/`xurl` notes, pointer back here.
+
+Optional background: **`docs/openclaw_handoff_agent.md`** (intent vs authority, no secrets in sandbox).
+
+Do **not** commit SSH keys, Telegram tokens, SMTP passwords, or Nostr/X signing material to the repo — only document **variable names** and where they are set (host env, OpenClaw dashboard secrets scoped to the host daemon, etc.).
 
 ## Summary
 
@@ -10,6 +26,9 @@ Goal: the **OpenClaw agent** drafts or reads; **human approval on Telegram** (or
 | **Nostr** | `nak` read-only wrapper | `/data/bin/nak` → `nak-real`; same PATH order | Telegram daemon → `nak-real event …` (signing key on host only) |
 | **Gmail (gog)** | Read/search only | Re-auth with **`--gmail-scope readonly`** (gogcli) | Outbound mail: enqueue + Telegram email path, **not** `gog gmail send` |
 | **SMTP email** | Enqueue JSON only | No SMTP secrets in container | `publish-gate-confirm` / email outbox Telegram daemon + SMTP on host |
+| **Workout Notion write** | Enqueue JSON payload only | No direct write endpoint/token in container | `publish-gate-confirm` Telegram daemon POSTs approved payload to write endpoint |
+| **Google Drive delete** | Read/list via gog only | `scripts/gog-readonly.sh` blocks `gog drive ... delete/remove/trash` | Enqueue JSON + Telegram approve; host runner deletes |
+| **Notion delete** | Read/query in-container | No in-container delete endpoint in skills/tools | Enqueue JSON + Telegram approve; host runner deletes |
 
 ## 1. xurl (already standard here)
 
@@ -38,7 +57,7 @@ Goal: the **OpenClaw agent** drafts or reads; **human approval on Telegram** (or
 
 Cron jobs or host scripts that **must** publish (e.g. X→Nostr sync) should call **`/data/bin/nak-real`** explicitly with an absolute path, or run outside the agent `PATH`.
 
-## 3. gog / Gmail (no send from agent)
+## 3. gog / Gmail + Drive delete blocking
 
 gogcli uses the **Gmail API** (not SMTP). Sending requires modify scopes; read-only does not.
 
@@ -52,9 +71,13 @@ gogcli uses the **Gmail API** (not SMTP). Sending requires modify scopes; read-o
 
 2. Confirm: `gog gmail labels list` works; **`gog gmail send`** should fail with a permission/scope error.
 
-3. Outbound mail from the agent must go through the **email outbox** (`enqueue-email-draft.py` + host approval), not gog send.
+3. Install `scripts/gog-readonly.sh` as `/data/bin/gog` (real binary at `/data/bin/gog-real`), and keep `/data/bin` first in `pathPrepend`.
 
-## 4. Telegram approval daemon (email + X + Nostr)
+4. Outbound mail from the agent must go through the **email outbox** (`enqueue-email-draft.py` + host approval), not gog send.
+
+5. Google Drive destructive commands from the agent (`gog drive ... delete/remove/trash`) must be blocked by wrapper and rerouted through Telegram-approved host deletion.
+
+## 4. Telegram approval daemon (email + X + Nostr + workout + delete gates)
 
 Skill: **`publish-gate-confirm`** — `skills/publish-gate-confirm/SKILL.md`.
 
@@ -68,8 +91,16 @@ Queues:
 | Email | `EMAIL_OUTBOX_ROOT` | `enqueue-email-draft.py` (email-outbox-confirm) |
 | X post | `TWEET_DRAFT_QUEUE_DIR` (default `/data/pending-tweets`) | `enqueue-tweet-draft.py` |
 | Nostr note | `NOSTR_DRAFT_QUEUE_DIR` (default `/data/.openclaw/nostr-outbox/pending`) | `enqueue-nostr-draft.py` |
+| Workout write | `WORKOUT_WRITE_QUEUE_DIR` (default `/data/.openclaw/write-gates/workout`) | `enqueue-workout-write.py` |
+| GDrive delete | `GDRIVE_DELETE_QUEUE_DIR` (default `/data/.openclaw/delete-gates/gdrive`) | `enqueue-gdrive-delete.py` |
+| Notion delete | `NOTION_DELETE_QUEUE_DIR` (default `/data/.openclaw/delete-gates/notion`) | `enqueue-notion-delete.py` |
 
 Run the daemon from `skills/publish-gate-confirm/scripts/` on the **VPS host** (see skill).
+
+Required host executors for delete gates:
+
+- `GDRIVE_DELETE_RUNNER`: executable called as `runner <draft-json-path>` on approve.
+- `NOTION_DELETE_RUNNER`: executable called as `runner <draft-json-path>` on approve.
 
 ## 5. Operational checklist
 
@@ -80,6 +111,8 @@ Run the daemon from `skills/publish-gate-confirm/scripts/` on the **VPS host** (
 - [ ] No `NOSTR_*` **private** keys in container env for interactive agents if policy is “queue only” (cron may still use secrets on host).
 - [ ] Telegram approval bot running under `systemd`/`tmux` on host.
 - [ ] Write-capable **xurl** / **nak** configs only on host paths the agent cannot execute directly.
+- [ ] `gog` wrapper installed and blocking Drive deletes in-container.
+- [ ] `GDRIVE_DELETE_RUNNER` and `NOTION_DELETE_RUNNER` configured on host.
 
 ## 6. Optional: OpenClaw tool policy
 

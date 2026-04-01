@@ -4,6 +4,9 @@ VPS host: one Telegram bot polls getUpdates and notifies on new drafts for:
   - Email (JSON in EMAIL_OUTBOX_ROOT/pending)
   - X / Twitter (JSON in TWEET_DRAFT_QUEUE_DIR, same shape as scripts/publish-pending.sh)
   - Nostr kind 1 (JSON in NOSTR_DRAFT_QUEUE_DIR)
+  - Workout write requests (JSON in WORKOUT_WRITE_QUEUE_DIR/pending)
+  - Google Drive delete requests (JSON in GDRIVE_DELETE_QUEUE_DIR/pending)
+  - Notion delete requests (JSON in NOTION_DELETE_QUEUE_DIR/pending)
 
 Uses a dedicated bot token (not OpenClaw's main bot). See SKILL.md and docs/public-write-gates.md.
 """
@@ -39,6 +42,9 @@ TELEGRAM_TEXT_MAX = 3500
 
 DEFAULT_TWEET_QUEUE = Path("/docker/openclaw-b60d/data/pending-tweets")
 DEFAULT_NOSTR_PENDING = Path("/docker/openclaw-b60d/data/.openclaw/nostr-outbox/pending")
+DEFAULT_WORKOUT_WRITE_QUEUE = Path("/docker/openclaw-b60d/data/.openclaw/write-gates/workout")
+DEFAULT_GDRIVE_DELETE_QUEUE = Path("/docker/openclaw-b60d/data/.openclaw/delete-gates/gdrive")
+DEFAULT_NOTION_DELETE_QUEUE = Path("/docker/openclaw-b60d/data/.openclaw/delete-gates/notion")
 
 
 def _state_dir() -> Path:
@@ -55,6 +61,18 @@ def _nostr_pending() -> Path:
 
 def _nostr_outbox_root() -> Path:
     return _nostr_pending().parent
+
+
+def _gdrive_delete_queue() -> Path:
+    return Path(os.environ.get("GDRIVE_DELETE_QUEUE_DIR", str(DEFAULT_GDRIVE_DELETE_QUEUE)))
+
+
+def _notion_delete_queue() -> Path:
+    return Path(os.environ.get("NOTION_DELETE_QUEUE_DIR", str(DEFAULT_NOTION_DELETE_QUEUE)))
+
+
+def _workout_write_queue() -> Path:
+    return Path(os.environ.get("WORKOUT_WRITE_QUEUE_DIR", str(DEFAULT_WORKOUT_WRITE_QUEUE)))
 
 
 def _load_state() -> dict:
@@ -155,7 +173,19 @@ def _edit_message(token: str, chat_id: int, message_id: int, text: str) -> None:
 
 
 def _parse_callback(data: str) -> tuple[str, str, bool] | None:
-    """Returns (channel, draft_id, is_approve). channel: email|tweet|nostr."""
+    """Returns (channel, draft_id, is_approve)."""
+    if data.startswith("aw:"):
+        return "workout_write", data[3:], True
+    if data.startswith("rw:"):
+        return "workout_write", data[3:], False
+    if data.startswith("ag:"):
+        return "gdrive_delete", data[3:], True
+    if data.startswith("rgd:"):
+        return "gdrive_delete", data[4:], False
+    if data.startswith("anp:"):
+        return "notion_delete", data[4:], True
+    if data.startswith("rnp:"):
+        return "notion_delete", data[4:], False
     if data.startswith("at:"):
         return "tweet", data[3:], True
     if data.startswith("rt:"):
@@ -208,6 +238,105 @@ def _find_nostr_path(pending_dir: Path, draft_id: str) -> Path | None:
     return None
 
 
+def _delete_pending_paths(queue_root: Path) -> list[Path]:
+    pending = queue_root / "pending"
+    if not pending.is_dir():
+        return []
+    return sorted(pending.glob("*.json"))
+
+
+def _find_delete_path(queue_root: Path, draft_id: str) -> Path | None:
+    for path in _delete_pending_paths(queue_root):
+        rec = load_draft(path)
+        if rec and rec.get("id") == draft_id:
+            return path
+    return None
+
+
+def _post_workout_payload(record: dict) -> tuple[int, str]:
+    url = os.environ.get("WORKOUT_WRITE_URL", "").strip()
+    if not url:
+        raise RuntimeError("WORKOUT_WRITE_URL is required")
+
+    timeout_sec = int(os.environ.get("WORKOUT_WRITE_TIMEOUT_SEC", "30"))
+    body = json.dumps(record.get("payload")).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    bearer = os.environ.get("WORKOUT_WRITE_BEARER_TOKEN", "").strip()
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            code = int(resp.getcode())
+            raw = resp.read().decode("utf-8", errors="replace")
+            return code, raw
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code}: {raw[:500]}") from e
+
+
+def _workout_finalize(queue_root: Path, path: Path, record: dict, approved: bool, result: str = "", status_code: int = 0) -> None:
+    draft_id = record.get("id", path.stem)
+    now = datetime.now(timezone.utc).isoformat()
+    if approved:
+        record["status"] = "written"
+        record["written_at"] = now
+        record["http_status"] = status_code
+        record["result"] = result[:1000]
+        dest = queue_root / "sent" / path.name
+        dest.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.unlink(missing_ok=True)
+        event = "workout_written"
+    else:
+        record["status"] = "rejected"
+        record["rejected_at"] = now
+        dest = queue_root / "rejected" / path.name
+        dest.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.unlink(missing_ok=True)
+        event = "workout_rejected"
+    audit_line(
+        queue_root / "audit.log",
+        {"event": event, "id": draft_id, "at": now},
+    )
+
+
+def _run_delete_runner(runner: str, record_path: Path) -> str:
+    runner = runner.strip()
+    if not runner:
+        raise RuntimeError("Delete runner not configured")
+    cmd = [runner, str(record_path)]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=os.environ.copy())
+    out = ((r.stdout or "") + "\n" + (r.stderr or "")).strip()
+    if r.returncode != 0:
+        raise RuntimeError(out or f"runner exit {r.returncode}")
+    return out
+
+
+def _delete_finalize(queue_root: Path, path: Path, record: dict, approved: bool, result: str = "") -> None:
+    draft_id = record.get("id", path.stem)
+    now = datetime.now(timezone.utc).isoformat()
+    if approved:
+        record["status"] = "deleted"
+        record["deleted_at"] = now
+        record["result"] = result
+        dest = queue_root / "sent" / path.name
+        dest.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.unlink(missing_ok=True)
+        event = "delete_sent"
+    else:
+        record["status"] = "rejected"
+        record["rejected_at"] = now
+        dest = queue_root / "rejected" / path.name
+        dest.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.unlink(missing_ok=True)
+        event = "delete_rejected"
+    audit_line(
+        queue_root / "audit.log",
+        {"event": event, "id": draft_id, "at": now},
+    )
+
+
 def _run_xurl_post(text: str) -> str:
     bin_path = os.environ.get("XURL_REAL_BIN", "/data/bin/xurl-real")
     r = subprocess.run(
@@ -227,11 +356,24 @@ def _run_nostr_event(content: str, relays: list[str]) -> None:
     if not relays:
         raise RuntimeError("No relays in draft")
     bin_path = os.environ.get("NAK_REAL_BIN", "/data/bin/nak-real")
-    cmd = [bin_path, "event", "-k", "1", "-c", content, *relays]
+    sec = (
+        os.environ.get("NOSTR_PRIVATE_HEX_KEY", "").strip()
+        or os.environ.get("NOSTR_DAMUS_PRIVATE_HEX_KEY", "").strip()
+        or os.environ.get("NOSTR_PRIVATE_KEY", "").strip()
+    )
+    if not sec:
+        raise RuntimeError(
+            "No NOSTR private key configured for publish gate "
+            "(set NOSTR_PRIVATE_HEX_KEY or NOSTR_DAMUS_PRIVATE_HEX_KEY in publish-gate.env)"
+        )
+    cmd = [bin_path, "event", "--sec", sec, "-k", "1", "-c", content, *relays]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=os.environ.copy())
+    out = ((r.stdout or "") + "\n" + (r.stderr or "")).strip()
     if r.returncode != 0:
-        err = (r.stderr or r.stdout or "").strip()
-        raise RuntimeError(err or f"nak exit {r.returncode}")
+        raise RuntimeError(out or f"nak exit {r.returncode}")
+    # nak can return RC=0 even when no relay accepted the publish.
+    if "success" not in out.lower():
+        raise RuntimeError(f"nak did not confirm relay publish success: {out[:400]}")
 
 
 def _tweet_finalize(path: Path, record: dict, published: bool, tweet_queue: Path, result: str = "") -> None:
@@ -289,20 +431,43 @@ def _nostr_finalize(path: Path, record: dict, sent: bool, root: Path) -> None:
         )
 
 
-def _resolve_path(channel: str, draft_id: str, email_root: Path, tweet_q: Path, nostr_p: Path) -> Path | None:
+def _resolve_path(
+    channel: str,
+    draft_id: str,
+    email_root: Path,
+    tweet_q: Path,
+    nostr_p: Path,
+    workout_q: Path,
+    gdrive_q: Path,
+    notion_q: Path,
+) -> Path | None:
     if channel == "email":
         return _find_email_path(email_root, draft_id)
     if channel == "tweet":
         return _find_tweet_path(tweet_q, draft_id)
     if channel == "nostr":
         return _find_nostr_path(nostr_p, draft_id)
+    if channel == "workout_write":
+        return _find_delete_path(workout_q, draft_id)
+    if channel == "gdrive_delete":
+        return _find_delete_path(gdrive_q, draft_id)
+    if channel == "notion_delete":
+        return _find_delete_path(notion_q, draft_id)
     return None
 
 
-def _prune_state(state: dict, email_root: Path, tweet_q: Path, nostr_p: Path) -> None:
+def _prune_state(
+    state: dict,
+    email_root: Path,
+    tweet_q: Path,
+    nostr_p: Path,
+    workout_q: Path,
+    gdrive_q: Path,
+    notion_q: Path,
+) -> None:
     for did, meta in list(state.get("by_draft_id", {}).items()):
         ch = (meta or {}).get("channel", "email")
-        if _resolve_path(ch, did, email_root, tweet_q, nostr_p) is None:
+        if _resolve_path(ch, did, email_root, tweet_q, nostr_p, workout_q, gdrive_q, notion_q) is None:
             state["by_draft_id"].pop(did, None)
 
 
@@ -314,6 +479,9 @@ def _process_updates(
     tweet_q: Path,
     nostr_p: Path,
     nostr_root: Path,
+    workout_q: Path,
+    gdrive_q: Path,
+    notion_q: Path,
 ) -> None:
     offset = int(state.get("telegram_offset", 0))
     try:
@@ -353,7 +521,7 @@ def _process_updates(
         chat_id = cq["message"]["chat"]["id"]
         message_id = cq["message"]["message_id"]
 
-        path = _resolve_path(channel, draft_id, email_root, tweet_q, nostr_p)
+        path = _resolve_path(channel, draft_id, email_root, tweet_q, nostr_p, workout_q, gdrive_q, notion_q)
         if path is None:
             _answer_callback(token, cq["id"], "Draft gone.")
             try:
@@ -400,6 +568,36 @@ def _process_updates(
                     _nostr_finalize(path, record, False, nostr_root)
                     _answer_callback(token, cq["id"], "Rejected.")
                     _edit_message(token, chat_id, message_id, "Nostr draft rejected.")
+            elif channel == "workout_write":
+                if is_approve:
+                    status_code, response = _post_workout_payload(record)
+                    _workout_finalize(workout_q, path, record, True, result=response, status_code=status_code)
+                    _answer_callback(token, cq["id"], "Written.")
+                    _edit_message(token, chat_id, message_id, f"Workout write approved.\nHTTP {status_code}")
+                else:
+                    _workout_finalize(workout_q, path, record, False)
+                    _answer_callback(token, cq["id"], "Rejected.")
+                    _edit_message(token, chat_id, message_id, "Workout write rejected.")
+            elif channel == "gdrive_delete":
+                if is_approve:
+                    out = _run_delete_runner(os.environ.get("GDRIVE_DELETE_RUNNER", ""), path)
+                    _delete_finalize(gdrive_q, path, record, True, result=out)
+                    _answer_callback(token, cq["id"], "Deleted.")
+                    _edit_message(token, chat_id, message_id, "Google Drive delete approved and executed.")
+                else:
+                    _delete_finalize(gdrive_q, path, record, False)
+                    _answer_callback(token, cq["id"], "Rejected.")
+                    _edit_message(token, chat_id, message_id, "Google Drive delete rejected.")
+            elif channel == "notion_delete":
+                if is_approve:
+                    out = _run_delete_runner(os.environ.get("NOTION_DELETE_RUNNER", ""), path)
+                    _delete_finalize(notion_q, path, record, True, result=out)
+                    _answer_callback(token, cq["id"], "Deleted.")
+                    _edit_message(token, chat_id, message_id, "Notion delete approved and executed.")
+                else:
+                    _delete_finalize(notion_q, path, record, False)
+                    _answer_callback(token, cq["id"], "Rejected.")
+                    _edit_message(token, chat_id, message_id, "Notion delete rejected.")
         except Exception as e:
             _answer_callback(token, cq["id"], f"Failed: {e}")
             audit_line(
@@ -557,6 +755,138 @@ def _scan_nostr(token: str, state: dict, allowlist: set[int], nostr_p: Path) -> 
         )
 
 
+def _scan_workout_write(token: str, state: dict, allowlist: set[int], queue_root: Path) -> None:
+    chat_id = _notify_chat_id(allowlist)
+    for path in _delete_pending_paths(queue_root):
+        record = load_draft(path)
+        if not record or not record.get("id"):
+            continue
+        draft_id = record["id"]
+        if draft_id in state["by_draft_id"]:
+            continue
+        payload_preview = json.dumps(record.get("payload"), ensure_ascii=False)
+        msg = (
+            "Workout write request\n"
+            f"File: {path.name}\n"
+            f"Label: {record.get('label', '')}\n"
+            f"Reason: {record.get('reason', '')}\n\n"
+            f"{payload_preview[:TELEGRAM_TEXT_MAX]}"
+        )
+        if len(payload_preview) > TELEGRAM_TEXT_MAX:
+            msg += "\n… (truncated)"
+        try:
+            c_id, m_id = _send_notify(
+                token,
+                chat_id,
+                msg,
+                _notify_keyboard(f"aw:{draft_id}", f"rw:{draft_id}"),
+            )
+        except Exception as e:
+            print(f"workout write notify {path.name}: {e}", file=sys.stderr)
+            continue
+        state["by_draft_id"][draft_id] = {
+            "channel": "workout_write",
+            "file": path.name,
+            "chat_id": c_id,
+            "message_id": m_id,
+        }
+        audit_line(
+            queue_root / "audit.log",
+            {
+                "event": "telegram_notified",
+                "channel": "workout_write",
+                "id": draft_id,
+                "at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+
+def _scan_gdrive_delete(token: str, state: dict, allowlist: set[int], queue_root: Path) -> None:
+    chat_id = _notify_chat_id(allowlist)
+    for path in _delete_pending_paths(queue_root):
+        record = load_draft(path)
+        if not record or not record.get("id"):
+            continue
+        draft_id = record["id"]
+        if draft_id in state["by_draft_id"]:
+            continue
+        msg = (
+            "Google Drive delete request\n"
+            f"File: {path.name}\n"
+            f"Drive file id: {record.get('target_id', '')}\n"
+            f"Label: {record.get('target_label', '')}\n"
+            f"Reason: {record.get('reason', '')}"
+        )
+        try:
+            c_id, m_id = _send_notify(
+                token,
+                chat_id,
+                msg[:TELEGRAM_TEXT_MAX],
+                _notify_keyboard(f"ag:{draft_id}", f"rgd:{draft_id}"),
+            )
+        except Exception as e:
+            print(f"gdrive delete notify {path.name}: {e}", file=sys.stderr)
+            continue
+        state["by_draft_id"][draft_id] = {
+            "channel": "gdrive_delete",
+            "file": path.name,
+            "chat_id": c_id,
+            "message_id": m_id,
+        }
+        audit_line(
+            queue_root / "audit.log",
+            {
+                "event": "telegram_notified",
+                "channel": "gdrive_delete",
+                "id": draft_id,
+                "at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+
+def _scan_notion_delete(token: str, state: dict, allowlist: set[int], queue_root: Path) -> None:
+    chat_id = _notify_chat_id(allowlist)
+    for path in _delete_pending_paths(queue_root):
+        record = load_draft(path)
+        if not record or not record.get("id"):
+            continue
+        draft_id = record["id"]
+        if draft_id in state["by_draft_id"]:
+            continue
+        msg = (
+            "Notion delete request\n"
+            f"File: {path.name}\n"
+            f"Page id: {record.get('target_id', '')}\n"
+            f"Label: {record.get('target_label', '')}\n"
+            f"Reason: {record.get('reason', '')}"
+        )
+        try:
+            c_id, m_id = _send_notify(
+                token,
+                chat_id,
+                msg[:TELEGRAM_TEXT_MAX],
+                _notify_keyboard(f"anp:{draft_id}", f"rnp:{draft_id}"),
+            )
+        except Exception as e:
+            print(f"notion delete notify {path.name}: {e}", file=sys.stderr)
+            continue
+        state["by_draft_id"][draft_id] = {
+            "channel": "notion_delete",
+            "file": path.name,
+            "chat_id": c_id,
+            "message_id": m_id,
+        }
+        audit_line(
+            queue_root / "audit.log",
+            {
+                "event": "telegram_notified",
+                "channel": "notion_delete",
+                "id": draft_id,
+                "at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+
 def main() -> int:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
@@ -572,6 +902,9 @@ def main() -> int:
     tweet_q = _tweet_queue()
     nostr_p = _nostr_pending()
     nostr_root = _nostr_outbox_root()
+    workout_q = _workout_write_queue()
+    gdrive_q = _gdrive_delete_queue()
+    notion_q = _notion_delete_queue()
 
     for d in (
         email_root / "pending",
@@ -581,6 +914,15 @@ def main() -> int:
         nostr_p,
         nostr_root / "sent",
         nostr_root / "rejected",
+        workout_q / "pending",
+        workout_q / "sent",
+        workout_q / "rejected",
+        gdrive_q / "pending",
+        gdrive_q / "sent",
+        gdrive_q / "rejected",
+        notion_q / "pending",
+        notion_q / "sent",
+        notion_q / "rejected",
     ):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -595,16 +937,22 @@ def main() -> int:
         except Exception as e:
             print(f"deleteWebhook: {e}", file=sys.stderr)
 
-    print("telegram_approval_daemon: email + tweet + nostr. Ctrl+C to stop.", file=sys.stderr)
+    print(
+        "telegram_approval_daemon: email + tweet + nostr + workout_write + gdrive_delete + notion_delete. Ctrl+C to stop.",
+        file=sys.stderr,
+    )
 
     while True:
         state = _load_state()
         try:
-            _prune_state(state, email_root, tweet_q, nostr_p)
-            _process_updates(token, state, allowlist, email_root, tweet_q, nostr_p, nostr_root)
+            _prune_state(state, email_root, tweet_q, nostr_p, workout_q, gdrive_q, notion_q)
+            _process_updates(token, state, allowlist, email_root, tweet_q, nostr_p, nostr_root, workout_q, gdrive_q, notion_q)
             _scan_email(token, state, allowlist, email_root)
             _scan_tweets(token, state, allowlist, tweet_q)
             _scan_nostr(token, state, allowlist, nostr_p)
+            _scan_workout_write(token, state, allowlist, workout_q)
+            _scan_gdrive_delete(token, state, allowlist, gdrive_q)
+            _scan_notion_delete(token, state, allowlist, notion_q)
         except Exception as e:
             print(f"loop error: {e}", file=sys.stderr)
         _save_state(state)
