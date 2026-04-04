@@ -201,6 +201,8 @@ If a bundled skill is `✓ ready` in `openclaw skills list`, use it directly. Ne
 
 **Rule:** Before using any CLI tool (tesseract, ffmpeg, convert, pdftotext, etc.), verify it exists with `which <tool>`. If it's missing, say so clearly and stop — do not proceed, invent a workaround, or fabricate output. Never claim a tool is running if `which` returned nothing.
 
+**Rule:** Any tool install done as `root` must be handed off to runtime user `node` before declaring success. Always validate execution as `node` (not only as root), and fix ownership/permissions for required runtime paths (for example under `/data`) so `node` can actually use the installed tool.
+
 ### Restarting OpenClaw
 
 OpenClaw runs as a foreground process inside the container. There is no systemctl, no service manager. To restart:
@@ -218,6 +220,8 @@ Files sent via Telegram land in `/data/.openclaw/media/inbound/` with UUID names
 ```bash
 ls -lt /data/.openclaw/media/inbound/ | head -5
 ```
+
+If the user starts the session by project ("vamos trabalhar no projeto X"), always stage the relevant uploaded file(s) into that project's folder before processing. Use `/data/projects/<project-slug>/inbox/` as the default destination and keep a human-readable filename whenever available.
 
 **For PDFs: always use the `nano-pdf` bundled skill.** Never read the raw PDF directly — it loads the whole file into context and hits token limits. nano-pdf processes in chunks.
 

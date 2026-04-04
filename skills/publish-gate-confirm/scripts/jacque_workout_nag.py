@@ -25,6 +25,7 @@ DEFAULT_OPENCLAW_CONFIG = "/data/.openclaw/openclaw.json"
 DEFAULT_TZ = "America/Sao_Paulo"
 DEFAULT_GRACE_DAYS = 2
 DEFAULT_MIN_HOURS_BETWEEN_NAGS = 3
+DEFAULT_MEASURES_INTERVAL_DAYS = 90
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Config:
     tz: ZoneInfo
     grace_days: int
     min_hours_between_nags: int
+    measures_interval_days: int
     token: str
     chat_id: int | None
 
@@ -89,6 +91,9 @@ def _load_config() -> Config:
         grace_days=int(os.environ.get("JACQUE_GRACE_DAYS", str(DEFAULT_GRACE_DAYS))),
         min_hours_between_nags=int(
             os.environ.get("JACQUE_MIN_HOURS_BETWEEN_NAGS", str(DEFAULT_MIN_HOURS_BETWEEN_NAGS))
+        ),
+        measures_interval_days=int(
+            os.environ.get("JACQUE_MEASURES_INTERVAL_DAYS", str(DEFAULT_MEASURES_INTERVAL_DAYS))
         ),
         token=token,
         chat_id=int(chat_raw) if chat_raw else None,
@@ -177,6 +182,42 @@ def _build_message(days_without: int, last_date: str, attempt: int) -> str:
     )
 
 
+def _maybe_send_measures_reminder(cfg: Config, state: dict, now: datetime, chat_id: int) -> None:
+    today = now.date()
+    today_str = today.isoformat()
+
+    last_raw = str(state.get("last_measures_reminder_date", "")).strip()
+    if not last_raw:
+        # First run: initialize anchor without notifying.
+        state["last_measures_reminder_date"] = today_str
+        return
+
+    try:
+        last_date = datetime.strptime(last_raw, "%Y-%m-%d").date()
+    except ValueError:
+        state["last_measures_reminder_date"] = today_str
+        return
+
+    if today == last_date:
+        return
+
+    if (today - last_date).days < cfg.measures_interval_days:
+        return
+
+    msg = (
+        "Psiu... ja bateu 90 dias das ultimas medidas.\n\n"
+        "Hoje voce vai tirar e me mandar:\n"
+        "- cintura\n"
+        "- peito\n"
+        "- braco\n"
+        "- coxa\n"
+        "- peso\n\n"
+        "Sem drama. Um passo por vez."
+    )
+    _send_telegram(cfg.token, chat_id, msg)
+    state["last_measures_reminder_date"] = today_str
+
+
 def main() -> int:
     cfg = _load_config()
     now = datetime.now(cfg.tz)
@@ -185,6 +226,12 @@ def main() -> int:
 
     state = _load_state(cfg.state_path)
     chat_id = cfg.chat_id or int(state.get("chat_id", 0) or 0) or None
+    if chat_id is None:
+        raise RuntimeError(
+            "Chat ID missing. Set JACQUE_CHAT_ID once (it will be saved in state) or TELEGRAM_NOTIFY_CHAT_ID."
+        )
+
+    _maybe_send_measures_reminder(cfg, state, now, chat_id)
     payload = _http_json(cfg.last_url)
     last_workout = _latest_workout_date(payload)
     last_workout_str = last_workout.isoformat()
@@ -225,11 +272,6 @@ def main() -> int:
 
     if last_nag_day != today_str:
         attempts_today = 0
-
-    if chat_id is None:
-        raise RuntimeError(
-            "Chat ID missing. Set JACQUE_CHAT_ID once (it will be saved in state) or TELEGRAM_NOTIFY_CHAT_ID."
-        )
 
     msg = _build_message(gap_days, last_workout_str, attempts_today)
     _send_telegram(cfg.token, chat_id, msg)

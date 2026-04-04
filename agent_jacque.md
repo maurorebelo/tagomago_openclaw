@@ -1,4 +1,4 @@
-# agent_jacque.md
+# AGENT_JACQUE.md
 
 ## Fonte e critério
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Digitize a book: ZIP of JPGs → EPUB
-# Usage: digitize-book.sh <zip_path> [lang]
-#   zip_path  path to the ZIP file (e.g. /data/mybook.zip)
-#   lang      tesseract language code, default: por  (options: por, eng, ita)
+# Digitize a book:
+#   - ZIP of page images (JPG/PNG/TIFF) -> EPUB (OCR + assembly)
+#   - PDF -> EPUB (via Calibre ebook-convert)
+# Usage: digitize-book.sh <input_path> [lang] [annotations]
+#   input_path   path to ZIP or PDF (e.g. /data/mybook.zip or /data/mybook.pdf)
+#   lang         tesseract language code, default: por (por, eng, ita, por+ita+eng)
+#   annotations  yes|no (only applies to ZIP/image flow), default: yes
 #
 # Output: /data/<bookname>.epub
 
@@ -10,21 +13,68 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ZIP_PATH="${1:-}"
+INPUT_PATH="${1:-}"
 LANG="${2:-por}"
 ANNOTATIONS="${3:-yes}"  # pass "no" to skip annotation detection
 
-if [[ -z "$ZIP_PATH" ]]; then
-  echo "Usage: digitize-book.sh <zip_path> [lang]" >&2
+if [[ -z "$INPUT_PATH" ]]; then
+  echo "Usage: digitize-book.sh <input_path> [lang] [annotations]" >&2
   exit 1
 fi
 
-if [[ ! -f "$ZIP_PATH" ]]; then
-  echo "ERROR: file not found: $ZIP_PATH" >&2
+if [[ ! -f "$INPUT_PATH" ]]; then
+  echo "ERROR: file not found: $INPUT_PATH" >&2
   exit 1
 fi
 
-# ── Verify dependencies ──────────────────────────────────────────────────────
+# ── Derive names ─────────────────────────────────────────────────────────────
+BASENAME="$(basename "$INPUT_PATH")"
+BASENAME="${BASENAME%.*}"
+BASENAME="$(basename "$BASENAME" .ZIP)"
+WORK_DIR="$(mktemp -d /tmp/digitize-${BASENAME}-XXXX)"
+PAGES_JSON="${WORK_DIR}/pages.json"
+INPUT_LOWER="${INPUT_PATH,,}"
+
+# If input is inside a project folder, write output to that project's outputs dir.
+# Otherwise, keep the legacy behavior and write to /data.
+if [[ "$INPUT_PATH" =~ ^/data/projects/([^/]+)/ ]]; then
+  PROJECT_SLUG="${BASH_REMATCH[1]}"
+  OUTPUT_DIR="/data/projects/${PROJECT_SLUG}/outputs"
+else
+  OUTPUT_DIR="/data"
+fi
+mkdir -p "$OUTPUT_DIR"
+OUTPUT_EPUB="${OUTPUT_DIR}/${BASENAME}.epub"
+
+cleanup() {
+  rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
+
+# ── PDF flow: Calibre direct conversion ──────────────────────────────────────
+if [[ "$INPUT_LOWER" == *.pdf ]]; then
+  if ! command -v ebook-convert &>/dev/null; then
+    echo "ERROR: ebook-convert not found (Calibre is required for PDF -> EPUB)." >&2
+    echo "Run: /data/skills/digitize-book/scripts/install_calibre.sh" >&2
+    exit 1
+  fi
+
+  echo "=== Digitize Book (PDF mode) ==="
+  echo "Input  : $INPUT_PATH"
+  echo "Output : $OUTPUT_EPUB"
+  echo ""
+  ebook-convert "$INPUT_PATH" "$OUTPUT_EPUB"
+  echo ""
+  echo "Done! EPUB available at: $OUTPUT_EPUB"
+  exit 0
+fi
+
+if [[ "$INPUT_LOWER" != *.zip ]]; then
+  echo "ERROR: unsupported input type. Use .zip (page images) or .pdf." >&2
+  exit 1
+fi
+
+# ── Verify dependencies for ZIP/image flow ───────────────────────────────────
 for tool in tesseract pandoc python3 unzip; do
   if ! command -v "$tool" &>/dev/null; then
     echo "ERROR: $tool not found" >&2
@@ -32,15 +82,8 @@ for tool in tesseract pandoc python3 unzip; do
   fi
 done
 
-# ── Derive names ─────────────────────────────────────────────────────────────
-BASENAME="$(basename "$ZIP_PATH" .zip)"
-BASENAME="$(basename "$BASENAME" .ZIP)"
-WORK_DIR="$(mktemp -d /tmp/digitize-${BASENAME}-XXXX)"
-OUTPUT_EPUB="/data/${BASENAME}.epub"
-PAGES_JSON="${WORK_DIR}/pages.json"
-
 echo "=== Digitize Book ==="
-echo "Input      : $ZIP_PATH"
+echo "Input      : $INPUT_PATH"
 echo "Lang       : $LANG"
 echo "Annotations: $ANNOTATIONS"
 echo "Output     : $OUTPUT_EPUB"
@@ -48,7 +91,7 @@ echo ""
 
 # ── Unzip ────────────────────────────────────────────────────────────────────
 echo "Unzipping..."
-unzip -q "$ZIP_PATH" -d "$WORK_DIR/pages"
+unzip -q "$INPUT_PATH" -d "$WORK_DIR/pages"
 
 # ── Find and sort images ──────────────────────────────────────────────────────
 echo "Finding images..."
@@ -59,7 +102,6 @@ mapfile -d '' IMAGES < <(find "$WORK_DIR/pages" \
 TOTAL="${#IMAGES[@]}"
 if [[ "$TOTAL" -eq 0 ]]; then
   echo "ERROR: no image files found in zip" >&2
-  rm -rf "$WORK_DIR"
   exit 1
 fi
 
@@ -124,9 +166,6 @@ echo ""
 
 # ── Build EPUB ────────────────────────────────────────────────────────────────
 python3 "$SCRIPT_DIR/build_epub.py" "$PAGES_JSON" "$OUTPUT_EPUB"
-
-# ── Cleanup ───────────────────────────────────────────────────────────────────
-rm -rf "$WORK_DIR"
 
 echo ""
 echo "Done! EPUB available at: $OUTPUT_EPUB"

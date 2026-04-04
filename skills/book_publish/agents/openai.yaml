@@ -1,0 +1,3 @@
+display_name: Book Publish
+short_description: Clean OCR markdown for ebook publishing
+default_prompt: Clean OCR markdown, build chapter anchor index, and split out headers/footers/sidenotes.

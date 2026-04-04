@@ -1,12 +1,13 @@
 ---
 name: digitize-book
-description: "Convert a ZIP of book page photos (JPGs) into an EPUB. Use when the user uploads a ZIP of scanned book pages, asks to digitize a book, create an ebook from photos, or convert scanned pages to EPUB. Also detects physical annotations (earmarks, underlined text, pencil margin notes) and preserves them as EPUB footnotes. Supports Portuguese, Italian, and English. Input: ZIP dropped into /data. Output: EPUB in /data."
+description: "Convert either (1) a ZIP of scanned book pages (JPG/PNG/TIFF) or (2) a PDF into an EPUB. Use when the user asks to digitize a book, create an ebook from photos, or convert PDF to EPUB. ZIP flow includes OCR, page classification, and physical annotation detection (earmarks, underlines, margin notes) preserved as EPUB footnotes. PDF flow uses Calibre ebook-convert. Supports Portuguese, Italian, and English. Input in /data. Output EPUB in /data."
 ---
 
 # Digitize Book
 
-Convert a ZIP of JPG book pages into a fully assembled EPUB with text, embedded images, and tables.
-Uses local Tesseract OCR (no external API) and pandoc (no external API).
+Convert either:
+- a ZIP of book page images into a fully assembled EPUB with OCR and annotations, or
+- a PDF directly to EPUB using Calibre.
 
 ## When to use
 
@@ -14,32 +15,52 @@ Uses local Tesseract OCR (no external API) and pandoc (no external API).
 - User says: "digitize this book", "OCR this book", "make an epub from these photos", "convert scanned pages to epub"
 - User has a physical book they photographed page by page
 
-## Prerequisites (verified ✓)
+## Prerequisites
 
-- **Tesseract** at `/usr/bin/tesseract` — OCR engine
-- **pandoc** at `/usr/bin/pandoc` — EPUB assembler
-- **python3** — page classifier and build script
-- ZIP file in `/data/` containing JPG/JPEG/PNG pages named in order (e.g. `001.jpg`, `002.jpg`)
+- **For ZIP/image flow**: `tesseract`, `pandoc`, `python3`, `unzip`
+- **For PDF flow**: `ebook-convert` (Calibre)
+- Input file in `/data/` as either:
+  - ZIP with JPG/JPEG/PNG/TIFF pages in order, or
+  - PDF file
+
+### Install Calibre (for PDF -> EPUB)
+
+Run:
+
+```bash
+/data/skills/digitize-book/scripts/install_calibre.sh
+```
+
+This installer tries, in order:
+1. current environment (if root + apt-get),
+2. local Docker (`openclaw-b60d-openclaw-1`),
+3. VPS via SSH (`hostinger-vps` + docker exec).
 
 ## How to run
 
-Single command — call the orchestrator script:
+Single command - call the orchestrator script:
 
 ```bash
 /data/skills/digitize-book/scripts/digitize-book.sh /data/<bookname>.zip [lang] [annotations]
+/data/skills/digitize-book/scripts/digitize-book.sh /data/<bookname>.pdf
 ```
 
-**lang** defaults to `por`. Options: `por`, `ita`, `eng`, `por+ita+eng`.
-**annotations** defaults to `yes`. Pass `no` to skip annotation detection (faster).
+`lang` defaults to `por`. Options: `por`, `ita`, `eng`, `por+ita+eng`.
+`annotations` defaults to `yes`. Pass `no` to skip annotation detection (faster). Ignored for PDF input.
 
 Example:
 ```bash
 /data/skills/digitize-book/scripts/digitize-book.sh /data/fantasia_concretezza.zip por yes
+/data/skills/digitize-book/scripts/digitize-book.sh /data/livro.pdf
 ```
 
-Output: `/data/fantasia_concretezza.epub`
+Output:
+- if input is under `/data/projects/<project-slug>/...`: `/data/projects/<project-slug>/outputs/<bookname>.epub`
+- otherwise: `/data/<bookname>.epub`
 
 ## What the pipeline does
+
+### ZIP/image flow
 
 1. **Unzips** the ZIP into a temp folder
 2. **Sorts** images by filename (natural order)
@@ -59,13 +80,20 @@ Output: `/data/fantasia_concretezza.epub`
 10. **Assembles** all pages into a single Markdown file, with annotation footnotes at the end
 11. **Calls pandoc** to produce the final EPUB with cover, TOC, metadata, and footnotes
 
+### PDF flow
+
+1. **Checks** `ebook-convert` availability
+2. **Runs** Calibre conversion from PDF to EPUB
+3. **Writes** EPUB to project `outputs/` when input is in a project path, otherwise to `/data`
+
 ## Deliver result
 
 After the script finishes:
 - Tell the user the EPUB path (e.g. `/data/fantasia_concretezza.epub`)
-- Report: total pages, classification breakdown (X text, Y images, Z tables)
-- If annotations were detected: how many pages had earmarks, underlines, or margin notes
-- If any pages had low OCR confidence, mention them
+- For ZIP flow: report total pages and classification breakdown (X text, Y images, Z tables)
+- For ZIP flow with annotations: report earmarks/underlines/margin note counts
+- For ZIP flow: mention low OCR confidence pages, if any
+- For PDF flow: report conversion success and output path
 
 ## Language codes
 
@@ -82,6 +110,7 @@ After the script finishes:
 skills/digitize-book/
 ├── SKILL.md                    ← this file
 └── scripts/
+    ├── install_calibre.sh      ← Calibre installer (PDF mode dependency)
     ├── digitize-book.sh        ← orchestrator (call this)
     ├── classify_page.py        ← page type classifier (text / image / table)
     ├── detect_annotations.py   ← physical annotation detector (earmarks, underlines, margin notes)
@@ -90,8 +119,8 @@ skills/digitize-book/
 
 ## Notes
 
-- Page ordering: filename sort order first; detected page numbers are used to reorder when they differ.
+- Page ordering (ZIP flow): filename sort order first; detected page numbers are used to reorder when they differ.
 - If images were uploaded via Telegram, move them to `/data/` before zipping, or ask the user to drop the ZIP directly.
 - OCR quality depends on photo quality — well-lit, straight, high-resolution images give best results.
 - Blurry or skewed pages will still be included but flagged as low-confidence.
-- The EPUB embeds images directly; no external hosting needed.
+- ZIP flow EPUB embeds images directly; no external hosting needed.
